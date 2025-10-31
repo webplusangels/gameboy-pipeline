@@ -63,7 +63,7 @@ asyncio_mode = "auto"
 addopts = [
     "--strict-markers",
     "--strict-config",
-    "--cov=gameboy_pipeline",
+    "--cov=src",
     "--cov-report=term-missing",
 ]
 
