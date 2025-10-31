@@ -12,12 +12,8 @@ Pydantic을 사용해서 자동으로 .env 파일을 읽고 검증합니다.
 
 from typing import Literal
 
-from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings
-
-# .env 파일에서 환경 변수 로드
-load_dotenv()
 
 
 class Settings(BaseSettings):
