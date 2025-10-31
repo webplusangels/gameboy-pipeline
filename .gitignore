@@ -77,3 +77,10 @@ credentials.json
 # OS files
 .DS_Store
 Thumbs.db
+
+# Coverage data
+.coverage
+.coverage.*
+
+# Coverage HTML report
+htmlcov/
