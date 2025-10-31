@@ -12,7 +12,7 @@ Pydantic을 사용해서 자동으로 .env 파일을 읽고 검증합니다.
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, PositiveInt
 from pydantic_settings import BaseSettings
 
 
@@ -34,7 +34,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Rate limiting (IGDB API 제한: 초당 4회)
-    rate_limit_requests_per_second: int = 4
+    rate_limit_requests_per_second: PositiveInt = Field(
+        default=4,
+        le=4,  # le = less than or equal to (4 이하)
+        description="IGDB API rate limit (max 4 per second)",
+    )
 
     # 데이터베이스 (선택)
     database_url: str | None = None
