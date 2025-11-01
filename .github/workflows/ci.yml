@@ -1,0 +1,90 @@
+name: CI with uv
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          enable-cache: true
+
+      - name: Install dependencies with uv
+        run: |
+          uv venv
+          uv sync --extra dev
+
+      - name: Run Ruff linter
+        run: |
+          uv run ruff check src tests
+
+      - name: Check code formatting
+        run: |
+          uv run ruff format --check src tests
+
+      - name: Run type checker with uv
+        run: |
+          uv run mypy src
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      # 코드 체크아웃
+      - uses: actions/checkout@v4
+
+      # Python 설정
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # 의존성 설치 - uv
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          enable-cache: true
+
+      # 의존성 설치 - 프로젝트
+      - name: Install dependencies with uv
+        run: |
+          uv venv
+          uv sync --extra dev
+
+      # 테스트 실행
+      - name: Run tests with uv
+        env:
+          IGDB_CLIENT_ID: "test-client-id"
+          IGDB_CLIENT_SECRET: "test-client-secret"
+          IGDB_RATE_LIMIT: 4
+          LOG_LEVEL: "INFO"
+        run: |
+          uv run pytest --cov=src --cov-report=xml
+
+      # 코드 커버리지 업로드
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: matrix.python-version == '3.11'
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-py${{ matrix.python-version }}
+          fail_ci_if_error: false
