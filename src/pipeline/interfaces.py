@@ -20,3 +20,22 @@ class Extractor(ABC):
         """
         raise NotImplementedError
         yield
+
+
+class AuthProvider(ABC):
+    """
+    AuthProvider 인터페이스.
+
+    이 인터페이스는 비동기적으로 유효한 토큰을 반환하는 메서드를 정의합니다.
+    """
+
+    @abstractmethod
+    async def get_valid_token(self) -> str:
+        """
+        유효한 액세스 토큰을 비동기적으로 반환합니다.
+
+        Returns:
+            str: 유효한 액세스 토큰.
+        """
+        raise NotImplementedError
+        return ""
