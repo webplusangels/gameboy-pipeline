@@ -1,12 +1,12 @@
 import pytest
-from src.pipeline.extractors import IgdbExtractor
 
+from src.pipeline.extractors import IgdbExtractor
 from src.pipeline.interfaces import Extractor
 
 
 def test_igdb_extractor_conforms_to_interface():
     """
-    [RED]
+    [GREEN]
     IgdbExtractor가 Extractor 인터페이스를 준수하는지 테스트합니다.
     """
     # 클래스가 Extractor를 상속하는지 확인
@@ -16,7 +16,7 @@ def test_igdb_extractor_conforms_to_interface():
 @pytest.mark.asyncio
 async def test_igdb_extractor_returns_mock_data(mocker):
     """
-    [RED]
+    [GREEN]
     IgdbExtractor가 모킹된 API로부터 데이터를 반환하는지 테스트합니다.
     """
     mock_client = mocker.AsyncMock()
@@ -25,7 +25,7 @@ async def test_igdb_extractor_returns_mock_data(mocker):
     mock_response.json.return_value = [{"id": 1, "name": "Mock Game"}]
     mock_client.post.return_value = mock_response
 
-    extractor = IgdbExtractor(client=mock_client, api_key="mock-key")
+    extractor = IgdbExtractor(client=mock_client, auth_provider=None)
 
     results = []
     async for item in extractor.extract():
@@ -39,7 +39,7 @@ async def test_igdb_extractor_returns_mock_data(mocker):
 @pytest.mark.asyncio
 async def test_igdb_extractor_returns_empty_list(mocker):
     """
-    [RED]
+    [GREEN]
     API가 빈 응답을 반환할 때 IgdbExtractor가 처리하는지 테스트합니다.
     """
     mock_client = mocker.AsyncMock()
@@ -48,7 +48,7 @@ async def test_igdb_extractor_returns_empty_list(mocker):
     mock_response.json.return_value = []  # 빈 응답
     mock_client.post.return_value = mock_response
 
-    extractor = IgdbExtractor(client=mock_client, api_key="mock-key")
+    extractor = IgdbExtractor(client=mock_client, auth_provider=None)
 
     results = []
     async for item in extractor.extract():
@@ -61,7 +61,7 @@ async def test_igdb_extractor_returns_empty_list(mocker):
 @pytest.mark.asyncio
 async def test_igdb_extractor_returns_multiple_items(mocker):
     """
-    [RED]
+    [GREEN]
     API가 여러 게임을 반환할 때 IgdbExtractor가 처리하는지 테스트합니다.
     """
     mock_client = mocker.AsyncMock()
@@ -74,7 +74,7 @@ async def test_igdb_extractor_returns_multiple_items(mocker):
     ]
     mock_client.post.return_value = mock_response
 
-    extractor = IgdbExtractor(client=mock_client, api_key="mock-key")
+    extractor = IgdbExtractor(client=mock_client, auth_provider=None)
 
     results = []
     async for item in extractor.extract():
@@ -90,7 +90,7 @@ async def test_igdb_extractor_returns_multiple_items(mocker):
 @pytest.mark.asyncio
 async def test_igdb_extractor_handles_http_error(mocker):
     """
-    [RED]
+    [GREEN]
     HTTP 에러(4xx, 5xx)가 발생할 때 IgdbExtractor가 예외를 발생시키는지 테스트합니다.
     """
     mock_client = mocker.AsyncMock()
@@ -99,7 +99,7 @@ async def test_igdb_extractor_handles_http_error(mocker):
     mock_response.raise_for_status.side_effect = Exception("HTTP 500 Error")
     mock_client.post.return_value = mock_response
 
-    extractor = IgdbExtractor(client=mock_client, api_key="mock-key")
+    extractor = IgdbExtractor(client=mock_client, auth_provider=None)
 
     with pytest.raises(Exception, match="HTTP 500 Error"):
         async for _ in extractor.extract():
