@@ -40,12 +40,22 @@ class IgdbExtractor(Extractor):
             "Client-ID": self._client_id,
         }
 
-        response = await self._client.post(
-            url=self._API_URL, data=self._BASE_QUERY, headers=headers
-        )
+        offset = 0
+        while True:
+            paginated_query = (
+                f"{self._BASE_QUERY} limit {self._LIMIT}; offset {offset};"
+            )
+            response = await self._client.post(
+                url=self._API_URL, data=paginated_query, headers=headers
+            )
 
-        response.raise_for_status()
-        response_data = response.json()
+            response.raise_for_status()
+            response_data = response.json()
 
-        for item in response_data:
-            yield item
+            if not response_data:
+                break
+
+            for item in response_data:
+                yield item
+
+            offset += self._LIMIT

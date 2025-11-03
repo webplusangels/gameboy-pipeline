@@ -26,12 +26,19 @@ async def test_igdb_extractor_uses_auth_provider(mocker):
     mock_client = mocker.AsyncMock()
     mock_auth_provider = mocker.AsyncMock(spec=AuthProvider)
     mock_auth_provider.get_valid_token.return_value = "test-bearer-token"
-
-    mock_client.post.return_value = mocker.Mock(
+    mock_response = mocker.Mock(
         status_code=200,
         json=lambda: [{"id": 1, "name": "Mock Game"}],
-        raise_for_status=lambda: None,  # raise_for_status()가 에러를 내지 않도록 모킹
+        raise_for_status=lambda: None,
     )
+    mock_response_empty = mocker.Mock(
+        status_code=200, json=lambda: [], raise_for_status=lambda: None
+    )
+
+    mock_client.post.side_effect = [
+        mock_response,
+        mock_response_empty,
+    ]
 
     extractor = IgdbExtractor(
         client=mock_client, auth_provider=mock_auth_provider, client_id="test-client-id"
@@ -43,7 +50,7 @@ async def test_igdb_extractor_uses_auth_provider(mocker):
 
     mock_auth_provider.get_valid_token.assert_called_once()
 
-    mock_client.post.assert_called_once()
+    assert mock_client.post.call_count == 2
 
     call_args = mock_client.post.call_args
     assert "headers" in call_args.kwargs
