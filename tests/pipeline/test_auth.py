@@ -26,6 +26,7 @@ async def test_igdb_extractor_uses_auth_provider(mocker):
     mock_client = mocker.AsyncMock()
     mock_auth_provider = mocker.AsyncMock(spec=AuthProvider)
     mock_auth_provider.get_valid_token.return_value = "test-bearer-token"
+    mock_auth_provider.client_id = "test-client-id"  # ← 속성 추가
 
     mock_client.post.return_value = mocker.Mock(
         status_code=200,

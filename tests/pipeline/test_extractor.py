@@ -25,7 +25,11 @@ async def test_igdb_extractor_returns_mock_data(mocker):
     mock_response.json.return_value = [{"id": 1, "name": "Mock Game"}]
     mock_client.post.return_value = mock_response
 
-    extractor = IgdbExtractor(client=mock_client, auth_provider=None)
+    mock_auth_provider = mocker.AsyncMock()
+    mock_auth_provider.get_valid_token.return_value = "mock-token"
+    mock_auth_provider.client_id = "mock-client-id"
+
+    extractor = IgdbExtractor(client=mock_client, auth_provider=mock_auth_provider)
 
     results = []
     async for item in extractor.extract():
@@ -48,7 +52,11 @@ async def test_igdb_extractor_returns_empty_list(mocker):
     mock_response.json.return_value = []  # 빈 응답
     mock_client.post.return_value = mock_response
 
-    extractor = IgdbExtractor(client=mock_client, auth_provider=None)
+    mock_auth_provider = mocker.AsyncMock()
+    mock_auth_provider.get_valid_token.return_value = "mock-token"
+    mock_auth_provider.client_id = "mock-client-id"
+
+    extractor = IgdbExtractor(client=mock_client, auth_provider=mock_auth_provider)
 
     results = []
     async for item in extractor.extract():
@@ -74,7 +82,11 @@ async def test_igdb_extractor_returns_multiple_items(mocker):
     ]
     mock_client.post.return_value = mock_response
 
-    extractor = IgdbExtractor(client=mock_client, auth_provider=None)
+    mock_auth_provider = mocker.AsyncMock()
+    mock_auth_provider.get_valid_token.return_value = "mock-token"
+    mock_auth_provider.client_id = "mock-client-id"
+
+    extractor = IgdbExtractor(client=mock_client, auth_provider=mock_auth_provider)
 
     results = []
     async for item in extractor.extract():
@@ -99,7 +111,11 @@ async def test_igdb_extractor_handles_http_error(mocker):
     mock_response.raise_for_status.side_effect = Exception("HTTP 500 Error")
     mock_client.post.return_value = mock_response
 
-    extractor = IgdbExtractor(client=mock_client, auth_provider=None)
+    mock_auth_provider = mocker.AsyncMock()
+    mock_auth_provider.get_valid_token.return_value = "mock-token"
+    mock_auth_provider.client_id = "mock-client-id"
+
+    extractor = IgdbExtractor(client=mock_client, auth_provider=mock_auth_provider)
 
     with pytest.raises(Exception, match="HTTP 500 Error"):
         async for _ in extractor.extract():

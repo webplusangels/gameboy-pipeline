@@ -8,11 +8,30 @@ class IgdbExtractor(Extractor):
     """IGDB API로부터 게임 데이터를 추출하는 Extractor 구현체."""
 
     def __init__(self, client: Any, auth_provider: Any) -> None:
+        """
+        Args:
+            client: HTTP 클라이언트 (httpx.AsyncClient 등)
+            auth_provider: 인증 토큰을 제공하는 AuthProvider
+        """
         self._client = client
         self._auth_provider = auth_provider
 
     async def extract(self) -> AsyncGenerator[dict[str, Any], None]:
-        response = await self._client.post(url="...", data="...")
+        """
+        IGDB API에서 게임 데이터를 추출합니다.
+
+        Yields:
+            dict[str, Any]: 게임 데이터 객체
+        """
+        token = await self._auth_provider.get_valid_token()
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Client-ID": self._auth_provider.client_id,
+        }
+
+        response = await self._client.post(url="...", data="...", headers=headers)
+
         response.raise_for_status()
         response_data = response.json()
 
