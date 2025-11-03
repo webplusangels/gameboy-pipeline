@@ -12,22 +12,19 @@ class IgdbExtractor(Extractor):
         client: Any,
         auth_provider: Any,
         client_id: str,
-        api_url: str = "https://api.igdb.com/v4/games",
-        query: str = "fields *; limit 500;",
     ) -> None:
         """
         Args:
             client: HTTP 클라이언트 (httpx.AsyncClient 등)
             auth_provider: 인증 토큰을 제공하는 AuthProvider
             client_id: 클라이언트 ID
-            api_url: IGDB API URL
-            query: IGDB API 쿼리
         """
         self._client = client
         self._auth_provider = auth_provider
         self._client_id = client_id
-        self._api_url = api_url
-        self._query = query
+        self._API_URL = "https://api.igdb.com/v4/games"
+        self._BASE_QUERY = "fields *;"
+        self._LIMIT = 500
 
     async def extract(self) -> AsyncGenerator[dict[str, Any], None]:
         """
@@ -44,7 +41,7 @@ class IgdbExtractor(Extractor):
         }
 
         response = await self._client.post(
-            url=self._api_url, data=self._query, headers=headers
+            url=self._API_URL, data=self._BASE_QUERY, headers=headers
         )
 
         response.raise_for_status()
