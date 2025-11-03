@@ -56,6 +56,9 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["gameboy_pipeline"]
 
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
