@@ -7,7 +7,7 @@ from src.pipeline.interfaces import Loader
 class S3Loader(Loader):
     """S3에 데이터를 로드하는 Loader 구현체."""
 
-    def __init__(self, client, bucket_name: str) -> None:
+    def __init__(self, client: Any, bucket_name: str) -> None:
         """
         Args:
             client: 비동기 S3 클라이언트 (aioboto3.client 등)
