@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 
@@ -65,7 +66,11 @@ async def test_e2e_pipeline_extractor_to_loader(s3_client):
             body_bytes = await response["Body"].read()
             body_str = body_bytes.decode("utf-8")
 
-            assert len(body_str.strip().split("\n")) == test_item_count
+            lines = body_str.strip().split("\n")
+            assert len(lines) == test_item_count
+
+            for i, line in enumerate(lines):
+                assert json.loads(line) == batch[i]
 
         finally:
             # 테스트 후 업로드된 파일 삭제
