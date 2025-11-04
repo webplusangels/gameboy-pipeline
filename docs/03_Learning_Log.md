@@ -262,3 +262,92 @@ IGDB는 `Client ID`와 `Client Secret`을 통해 OAuth 토큰을 발급한 뒤, 
 ### 결과
 
 일단 모든 테스트를 GREEN으로 만든 후에 client_id를 `AuthProvider` 부분에서 삭제함으로서, Extractor는 직접 client_id를 받게 됩니다. 그렇게 테스트 코드에서도 완전한 의존성 분리와, 해당 테스트 코드에서 테스트 해야만 하는 부분을 좀 더 쉽게 인식할 수 있었습니다.
+
+## [Architecture] Loader의 설계
+
+2025-11-03
+
+### 문제
+
+> [!WARNING]
+> Loader의 두 가지 방식: list vs generator
+
+처음엔 `Loader`의 인터페이스를 다음과 같이 설계했습니다.
+
+```python
+class Loader(ABC):
+    """
+    Loader 인터페이스.
+
+    이 인터페이스는 비동기적으로 데이터를 로드하는 메서드를 정의합니다.
+    """
+
+    @abstractmethod
+    async def load(self, data: list[dict[str, Any]], key: str) -> None:
+        """
+        데이터 배치를 'key'라는 이름으로 Data Lake에 적재합니다.
+
+        Args:
+            data (list[dict[str, Any]]): Extractor가 생성한 데이터 배치.
+            key (str): S3 등 데이터가 적재될 위치를 나타내는 키.
+        """
+        raise NotImplementedError
+        return None
+
+```
+
+그러나 코드를 보던 중 이런 의문이 들었습니다.
+
+> `data`가 배치(Batch)가 아니라면?
+
+이렇게 구현하면 예상되는 문제점들은 다음과 같습니다.
+
+```plain
+❌ 메모리 압박: 10만 개 데이터를 list로 받으면 메모리 부족
+❌ 유연성 부족: 스트리밍 처리 불가능
+❌ Extractor와 불일치: Extractor는 AsyncGenerator인데 Loader는 list
+```
+
+그렇게 이 문제들을 해결하기 위해 제시된 대안은 **스트리밍** 방식으로 `Loader`역시 `AsyncGenerator`를 이용해 좀 더 유연한 방식으로 대체하는 것이었습니다. 과연 둘의 트레이드 오프를 고려했을 때 `Loader`의 알맞은 구조는 무엇일까요?
+
+### 해결
+
+저의 결론은 `list` 인터페이스가 더 실용적인 설계라는 것이었습니다.
+
+일단 제 파이프라인에서 `Loader`는 S3와 같은 파일 기반의 데이터 레이크에 적재를 목적으로 하고 있습니다. 만약 스트리밍 방식으로 이를 구현하게 되면 Extract 단계를 포함해 O(1)의 메모리를 사용하면서 파이프라인 전체가 흐르는-스트리밍되며 좋은 설계 구조가 되겠지만, `Loader`의 복잡도는 매우 높아지게 됩니다.
+
+예를 들어 S3는 파일 단위이며, 스트림을 파일로 만들기 위해서는 `Loader`내부에 업로드 로직이나 내부에서 배치 처리를 직접 구현해야 하는 복잡성이 추가됩니다. 이는 결정을 인터페이스 구현체에게 맡기는 유연하고 확장적인 구조이며 이로 인해 추출된 데이터들을 여러 방식으로 Load할 수 있다는 장점이 존재하지만, 제가 구현해야 할 작은 크기의 파이프라인에서는 S3 외에 당장 구현할 필요도 없습니다.
+
+더해서 데이터 삽입 시 부과되는 S3의 요금을 생각하면 `Loader` 내부의 배치 처리가 강제되고, 그렇지 않으면 요금 폭탄을 맞게 되는 이지선다에 놓이게 됩니다.
+
+### 결과
+
+S3를 데이터 레이크로 결정한 이상 list 형태로 `Loader`를 구현하는 것으로 합니다. 하지만 이 방식에도 풀리지 않은 문제가 없는 것은 아닌데요. 예를 들어 "메모리의 압박은 어떻게 할 것인가?" 가 남아있습니다.
+
+이에 대한 결론은 '"Orchestrator"의 책임으로 구분하는 것이 좋다'입니다. `Loader`의 책임은 배치를 파일로 변환하는 것입니다. 그리고 `Orchestrator`의 책임은 스트림을 배치로 만드는 것이죠. 만약 메모리에서 처리할 수 있는 배치의 크기를 `Orchestrator`에서 제어할 수 있다면 이 문제는 해결할 수 있습니다 예를 들어 다음과 같이 설계합니다.
+
+```python
+async def run_pipeline():
+    ...
+    batch = []
+    BATCH_SIZE = 1000  # <-- 메모리 한계를 1000개로 제어
+
+    # 파이프라인 시작
+    async for item in extractor.extract():
+        batch.append(item)
+
+        # 배치가 차면 Loader 호출
+        if len(batch) >= BATCH_SIZE:
+            key = f"raw/games/{uuid.uuid4()}.jsonl"
+            await loader.load(batch, key) # <-- list(배치) 전달
+            batch.clear() # 메모리 해제
+
+    # 만약 배치가 남았다면
+    if batch:
+        key = f"raw/games/{uuid.uuid4()}.jsonl"
+        await loader.load(batch, key)
+
+    # 파이프라인 종료
+```
+
+이러면 메모리의 압박에서 벗어남은 물론, 다른 부가 처리 없이 `extractor`만으로 파이프라인이 스트리밍으로 동작하게 됩니다.
