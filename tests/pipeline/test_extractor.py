@@ -202,17 +202,17 @@ async def test_igdb_extractor_handles_pagination(mocker):
 
     # 호출 1: offset 0
     query_page_1 = f"{extractor._BASE_QUERY} limit {extractor._LIMIT}; offset 0;"
-    assert all_calls[0].kwargs["data"] == query_page_1
+    assert all_calls[0].kwargs["content"] == query_page_1
 
     # 호출 2: offset 500
     query_page_2 = (
         f"{extractor._BASE_QUERY} limit {extractor._LIMIT}; offset {extractor._LIMIT};"
     )
-    assert all_calls[1].kwargs["data"] == query_page_2
+    assert all_calls[1].kwargs["content"] == query_page_2
 
     # 호출 3: offset 1000
     query_page_3 = f"{extractor._BASE_QUERY} limit {extractor._LIMIT}; offset {extractor._LIMIT * 2};"
-    assert all_calls[2].kwargs["data"] == query_page_3
+    assert all_calls[2].kwargs["content"] == query_page_3
 
 
 @pytest.mark.asyncio
