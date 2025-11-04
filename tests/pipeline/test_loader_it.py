@@ -14,8 +14,10 @@ pytestmark = pytest.mark.integration
 @pytest.fixture(scope="function")
 async def s3_client():
     """실제 aioboto3 S3 클라이언트 세션을 생성합니다."""
-    session = aioboto3.Session()
-    async with session.client("s3") as client:
+    region = os.getenv("AWS_DEFAULT_REGION")
+
+    session = aioboto3.Session(region_name=region)
+    async with session.client("s3", region_name=region) as client:
         yield client
 
 
