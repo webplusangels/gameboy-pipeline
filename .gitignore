@@ -18,7 +18,6 @@ ENV/
 
 # uv
 .python-version
-uv.lock
 
 # Build / packaging
 build/
