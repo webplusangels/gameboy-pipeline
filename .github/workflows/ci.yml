@@ -78,9 +78,11 @@ jobs:
 
       # 코드 커버리지 업로드
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: matrix.python-version == '3.11'
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: webplusangels/gameboy-pipeline
           files: ./coverage.xml
           flags: unit
           name: codecov-py${{ matrix.python-version }}
@@ -127,9 +129,11 @@ jobs:
 
       # 코드 커버리지 업로드
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: matrix.python-version == '3.11'
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: webplusangels/gameboy-pipeline
           files: ./coverage.xml
           flags: integration
           name: codecov-py${{ matrix.python-version }}
