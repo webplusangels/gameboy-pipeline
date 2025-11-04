@@ -39,3 +39,23 @@ class AuthProvider(ABC):
         """
         raise NotImplementedError
         return ""
+
+
+class Loader(ABC):
+    """
+    Loader 인터페이스.
+
+    이 인터페이스는 비동기적으로 데이터를 로드하는 메서드를 정의합니다.
+    """
+
+    @abstractmethod
+    async def load(self, data: list[dict[str, Any]], key: str) -> None:
+        """
+        데이터 배치를 'key'라는 이름으로 Data Lake에 적재합니다.
+
+        Args:
+            data (list[dict[str, Any]]): Extractor가 생성한 데이터 배치.
+            key (str): S3 등 데이터가 적재될 위치를 나타내는 키.
+        """
+        raise NotImplementedError
+        return None
