@@ -24,6 +24,9 @@ class S3Loader(Loader):
             data (list[dict[str, Any]]): Extractor가 생성한 데이터 배치.
             key (str): S3 등 데이터가 적재될 위치를 나타내는 키.
         """
+        if not data:
+            return
+
         jsonl_data = "\n".join(json.dumps(item) for item in data)
         await self._s3_client.put_object(
             Bucket=self._bucket_name,
