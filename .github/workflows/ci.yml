@@ -78,9 +78,11 @@ jobs:
 
       # 코드 커버리지 업로드
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: matrix.python-version == '3.11'
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: webplusangels/gameboy-pipeline
           files: ./coverage.xml
           flags: unit
           name: codecov-py${{ matrix.python-version }}
@@ -116,20 +118,60 @@ jobs:
           uv venv
           uv sync --extra dev
 
+      - name: DEBUG - Manual AWS CLI S3 Test
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+        run: |
+          echo "--- DEBUGGING S3 PERMISSIONS ---"
+          echo "AWS Identity:"
+          uv run aws sts get-caller-identity
+
+          echo "Target Bucket: $S3_BUCKET_NAME"
+
+          echo "Hello S3" > debug_file.txt
+
+          TEST_KEY="raw/games/debug_test_file.txt"
+
+          echo "Attempting: aws s3 cp debug_file.txt s3://$S3_BUCKET_NAME/$TEST_KEY"
+
+          # [핵심] 1. PutObject 테스트
+          uv run aws s3 cp debug_file.txt s3://$S3_BUCKET_NAME/$TEST_KEY
+
+          echo "PutObject Success. Attempting GetObject..."
+
+          # [핵심] 2. GetObject 테스트
+          uv run aws s3 cp s3://$S3_BUCKET_NAME/$TEST_KEY received_file.txt
+
+          echo "GetObject Success. Attempting DeleteObject..."
+
+          # [핵심] 3. DeleteObject 테스트
+          uv run aws s3 rm s3://$S3_BUCKET_NAME/$TEST_KEY
+
+          echo "--- DEBUG COMPLETE: All AWS CLI operations successful ---"
+
       # 테스트 실행
       - name: Run tests with uv
         env:
           IGDB_CLIENT_ID: ${{ secrets.IGDB_CLIENT_ID }}
           IGDB_STATIC_TOKEN: ${{ secrets.IGDB_STATIC_TOKEN }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           LOG_LEVEL: "INFO"
         run: |
           uv run pytest -m "integration" --cov=src --cov-report=xml
 
       # 코드 커버리지 업로드
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: matrix.python-version == '3.11'
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: webplusangels/gameboy-pipeline
           files: ./coverage.xml
           flags: integration
           name: codecov-py${{ matrix.python-version }}

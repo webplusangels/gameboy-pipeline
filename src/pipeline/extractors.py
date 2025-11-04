@@ -46,7 +46,7 @@ class IgdbExtractor(Extractor):
                 f"{self._BASE_QUERY} limit {self._LIMIT}; offset {offset};"
             )
             response = await self._client.post(
-                url=self._API_URL, data=paginated_query, headers=headers
+                url=self._API_URL, content=paginated_query, headers=headers
             )
 
             response.raise_for_status()
