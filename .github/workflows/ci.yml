@@ -119,13 +119,8 @@ jobs:
       # 테스트 실행
       - name: Run tests with uv
         env:
-          IGDB_CLIENT_ID: ${{
-            secrets.IGDB_CLIENT_ID
-          }}
-          IGDB_STATIC_TOKEN: ${{
-            secrets.IGDB_STATIC_TOKEN
-          }}
-          IGDB_RATE_LIMIT: 4
+          IGDB_CLIENT_ID: ${{ secrets.IGDB_CLIENT_ID }}
+          IGDB_STATIC_TOKEN: ${{ secrets.IGDB_STATIC_TOKEN }}
           LOG_LEVEL: "INFO"
         run: |
           uv run pytest -m "integration" --cov=src --cov-report=xml
