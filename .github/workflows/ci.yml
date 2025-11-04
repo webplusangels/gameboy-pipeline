@@ -123,6 +123,9 @@ jobs:
         env:
           IGDB_CLIENT_ID: ${{ secrets.IGDB_CLIENT_ID }}
           IGDB_STATIC_TOKEN: ${{ secrets.IGDB_STATIC_TOKEN }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           LOG_LEVEL: "INFO"
         run: |
           uv run pytest -m "integration" --cov=src --cov-report=xml
