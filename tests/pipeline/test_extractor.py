@@ -2,11 +2,28 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.pipeline.extractors import IgdbExtractor
+from src.pipeline.extractors import BaseIgdbExtractor, IgdbExtractor
 from src.pipeline.interfaces import AuthProvider, Extractor
 
 
-def test_igdb_extractor_conforms_to_interface():
+@pytest.mark.asyncio
+async def test_igdb_extractor_not_implemented(
+    mock_client: AsyncMock, mock_auth_provider: AuthProvider
+):
+    """
+    [GREEN]
+    IgdbExtractor의 추상 메서드가 구현되지 않았을 때 NotImplementedError를 발생시키는지 테스트합니다.
+    """
+    with pytest.raises(NotImplementedError):
+        BaseIgdbExtractor(
+            client=mock_client,
+            auth_provider=mock_auth_provider,
+            client_id="test-client-id",
+        )
+
+
+@pytest.mark.asyncio
+async def test_igdb_extractor_conforms_to_interface():
     """
     [GREEN]
     IgdbExtractor가 Extractor 인터페이스를 준수하는지 테스트합니다.

@@ -1,6 +1,9 @@
+from unittest.mock import AsyncMock, Mock
+
 import pytest
 
 from src.pipeline.extractors import Extractor, IgdbPlatformExtractor
+from src.pipeline.interfaces import AuthProvider
 
 MOCK_PLATFORM_DATA = [
     {"id": 6, "name": "PC (Microsoft Windows)", "slug": "win"},
@@ -18,20 +21,20 @@ async def test_platform_extractor_conforms_to_interface():
 
 
 @pytest.mark.asyncio
-async def test_platform_extractor_fetches_and_pages_data(mocker):
+async def test_platform_extractor_fetches_and_pages_data(
+    mocker, mock_client: AsyncMock, mock_auth_provider: AuthProvider
+):
     """
     [GREEN]
     IgdbPlatformExtractor가 'platforms' 엔드포인트에서
     올바르게 데이터를 페칭하고 페이지네이션하는지 테스트합니다.
     """
-    mock_client = mocker.AsyncMock()
-
-    mock_response_page_1 = mocker.Mock(
+    mock_response_page_1 = Mock(
         status_code=200,
         json=lambda: MOCK_PLATFORM_DATA,
         raise_for_status=lambda: None,
     )
-    mock_response_page_2 = mocker.Mock(
+    mock_response_page_2 = Mock(
         status_code=200,
         json=lambda: [],
         raise_for_status=lambda: None,
@@ -40,9 +43,6 @@ async def test_platform_extractor_fetches_and_pages_data(mocker):
         mock_response_page_1,
         mock_response_page_2,
     ]
-
-    mock_auth_provider = mocker.AsyncMock()
-    mock_auth_provider.get_valid_token.return_value = "mock-token"
 
     extractor = IgdbPlatformExtractor(
         client=mock_client, auth_provider=mock_auth_provider, client_id="mock-client"
@@ -60,9 +60,9 @@ async def test_platform_extractor_fetches_and_pages_data(mocker):
 
     all_calls = mock_client.post.call_args_list
 
-    api_url = "https://api.igdb.com/v4/platforms"
-    base_query = "fields *;"
-    limit = 50
+    api_url = extractor._API_URL
+    base_query = extractor._BASE_QUERY
+    limit = extractor._LIMIT
 
     query_page_1 = f"{base_query} limit {limit}; offset 0;"
     query_page_2 = f"{base_query} limit {limit}; offset {limit};"
