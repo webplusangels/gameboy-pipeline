@@ -473,3 +473,145 @@ class IgdbPlatformExtractor(BaseIgdbExtractor):
 다음 차원을 추가하는 작업 또한 굉장히 간단해졌고, 테스트 코드 또한 해당 원칙을 이용해 중복 코드를 생략하는 방식으로 접근할 수 있습니다. 다만 테스트 코드의 경우, 테스트의 목적인 명확성을 위해 테스트 과정이 아닌 `conftest.py`의 fixture를 통해 데스트 셋업의 중복 코드를 줄이는 것을 목표로 합니다.
 
 TDD에서 리팩토링은 수시로 해줘야 하는 것 같습니다. 최소 기능 단위로 개발하고, 이를 테스트로 검증하면서 수시로 리팩토링하는 접근법 또한 실용성이 돋보이는 것 같습니다.
+
+## [Design] 추상 클래스로의 접근 시점
+
+2025-11-05
+
+> [!WARNING] > `hasattr`와 `@abstractmethod`, `@property`의 차이
+
+아까 리팩토링을 통해 IGDB 공용 Extractor 클래스를 사용하면 다음과 같이 손쉽게 새로운 Extractor를 만들 수 있었습니다.
+
+```python
+class SomeExtractor(BaseIgdbExtractor):
+    _API_URL = "..."
+    _BASE_QUERY = "fields *;"
+    _LIMIT = 500
+```
+
+그리고 `BaseIgdbExtractor` 클래스에서는 이런 부분이 존재합니다.
+
+```python
+if (
+    not hasattr(self, "_API_URL")
+    or not hasattr(self, "_BASE_QUERY")
+    or not hasattr(self, "_LIMIT")
+):
+    raise NotImplementedError(
+        "서브클래스에서 _API_URL, _BASE_QUERY, _LIMIT 속성을 정의해야 합니다."
+    )
+```
+
+이 코드는 왜 위험할 수 있을까요?
+
+추상 클래스는 단순하게 표현하자면 구현의 형식을 강제하기 위해 만든 클래스라고 할 수 있습니다. 하지만 만약 위와 같이 `hasattr`(속성을 가지고 있는가?)만을 통해 속성을 검사하게 된다면, 코드가 실행되고 `__init__` 메서드가 호출되어야만 `NotImplementedError` 오류를 발견할 수 있습니다. 쉽게 말해 선언 당시에는 오류를 발견할 수 없다는 의미이지요.
+
+심지어 `_API_URL`이 `None`이라고 설정되어도 검사는 통과하지만 실제 코드는 실패하는 경우가 생길 수도 있습니다.
+
+### 해결
+
+이를 해결하기 위해 해결책으로 제시된 방법이 `@abstractmethod`와 `@property`입니다. 이를 통해 추상 속성을 만들 수 있습니다.
+
+먼저 클래스가 `ABC`를 상속받도록 하고, 내부의 속성 설정을 메서드처럼 정의합니다. 코드는 다음과 같습니다.
+
+```python
+from abc import ABC, abstractmethod
+
+class BaseApiExtractor(Extractor, ABC):
+    """
+    API 기반 Extractor를 위한 추상 기본 클래스.
+    """
+
+    @property
+    @abstractmethod
+    def _API_URL(self) -> str:
+        """API 엔드포인트 URL"""
+        pass
+
+    @property
+    @abstractmethod
+    def _BASE_QUERY(self) -> str:
+        """API에 보낼 기본 쿼리"""
+        pass
+
+    @property
+    @abstractmethod
+    def _LIMIT(self) -> int:
+        """페이지네이션 등을 위한 API 호출 제한"""
+        pass
+```
+
+이렇게 작성한다면 세 가지 속성 중 하나라도 빠뜨릴 시, 인스턴스를 만드는 순간 `TypeError`가 발생합니다. 정적 분석 시점에서 오류가 발생하게 되는 것입니다. 빠르게 오류를 발생시켜 테스트의 이유를 명확하게 정의할 수 있습니다.
+
+추가로 `NotImplementedError`가 아닌 Python 표준 오류인 `TypeError`를 발생시킨다는 점도 더 안정적이라고 생각할 수 있습니다.
+
+### 결과
+
+`BaseIgdbExtractor`는 위와 같이 변경하였고, 이를 상속하는 클래스는 다음과 같이 선언할 수 있습니다.
+
+```python
+class IgdbPlatformExtractor(BaseIgdbExtractor):
+    """IGDB API로부터 플랫폼 데이터를 추출하는 Extractor 구현체."""
+
+    @property
+    def api_url(self) -> str:
+        return "https://api.igdb.com/v4/platforms"
+
+    @property
+    def base_query(self) -> str:
+        return "fields *;"
+
+    @property
+    def limit(self) -> int:
+        return 50
+```
+
+추가로 속성이 `_API_URL`과 같이 대문자로 표기되면 린트 오류가 발생되기 때문에, 모두 소문자로 바꾸는 작업을 추가로 진행하였습니다.
+
+## [Architecture] 어떤 차원 데이터를 가져와야 할까?
+
+2025-11-05
+
+### 문제
+
+> [!WARNING]
+> 어떤 IGDB 데이터를 우선적으로 가져와야 할까?
+
+위에서도 언급했던 문제이지만 IGDB API는 games 외에도 많은 차원 테이블을 제공합니다.
+
+- platforms, genres, game_modes (핵심 메타데이터)
+- themes, player_perspectives (부가 정보)
+- companies, franchises (비즈니스 정보)
+- artworks, screenshots, videos (미디어)
+- age_ratings, websites, release_dates (세부 정보)
+- ... 총 40개 이상의 엔드포인트
+
+모든 데이터를 추출하면 완벽하겠지만, 작업은 순차적으로 진행되기 때문에, MVP 관점에서 우선 순위를 정해야 했습니다.
+
+### 해결
+
+저는 다음과 같은 기준으로 차원 데이터의 우선 순위를 결정하였습니다.
+
+**게임 분류의 핵심:**
+
+- `platforms` - "어떤 플랫폼에서 나왔는가?"
+- `genres` - "어떤 장르인가?"
+- `game_modes` - "싱글플레이? 멀티플레이?"
+- `themes` - "게임의 주제/분위기"
+- `player_perspectives` - "1인칭? 3인칭?"
+
+**차후 확장 시 추가:**
+
+- `companies` - 개발사/퍼블리셔 정보
+- `franchises` - 시리즈 정보
+- `release_dates` - 출시일 상세 정보
+
+일단은 분석에 용이한 데이터들을 먼저 확보한 뒤, 데이터들의 분석 가치를 만들고 다른 데이터들을 가져오는 전략을 택하였습니다.
+
+### 결과
+
+현재 차원 테이블 5개를 모두 구현하였고, 파이프라인을 완성한 후 필요에 따라 점진적인 확장을 진행합니다.
+
+제가 목표로 삼은 소프트웨어가 작게 시작해서 테스트로 검증하며 점진적으로 확장하는 방식이기 때문에 이렇게 결정했습니다.
+
+다음 단계로 Transform을 구현하도록 하겠습니다.
