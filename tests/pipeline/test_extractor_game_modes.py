@@ -2,36 +2,36 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.pipeline.extractors import IgdbGenreExtractor
+from src.pipeline.extractors import IgdbGameModeExtractor
 from src.pipeline.interfaces import AuthProvider, Extractor
 
-MOCK_GENRE_DATA = [
-    {"id": 4, "name": "Fighting", "slug": "fighting"},
-    {"id": 5, "name": "Shooter", "slug": "shooter"},
+MOCK_GAME_MODE_DATA = [
+    {"id": 1, "name": "Single player", "slug": "single-player"},
+    {"id": 2, "name": "Multiplayer", "slug": "multiplayer"},
 ]
 
 
 @pytest.mark.asyncio
-async def test_genre_extractor_conforms_to_interface():
+async def test_game_mode_extractor_conforms_to_interface():
     """
     [GREEN]
-    IgdbGenreExtractor가 Extractor 인터페이스를 준수하는지 테스트합니다.
+    IgdbGameModeExtractor가 Extractor 인터페이스를 준수하는지 테스트합니다.
     """
-    assert issubclass(IgdbGenreExtractor, Extractor)
+    assert issubclass(IgdbGameModeExtractor, Extractor)
 
 
 @pytest.mark.asyncio
-async def test_genre_extractor_fetches_and_pages_data(
+async def test_game_mode_extractor_fetches_and_pages_data(
     mocker, mock_client: AsyncMock, mock_auth_provider: AuthProvider
 ):
     """
     [GREEN]
-    IgdbGenreExtractor가 'genres' 엔드포인트에서
+    IgdbGameModeExtractor가 'game_modes' 엔드포인트에서
     올바르게 데이터를 페칭하고 페이지네이션하는지 테스트합니다.
     """
     mock_response_page_1 = Mock(
         status_code=200,
-        json=lambda: MOCK_GENRE_DATA,
+        json=lambda: MOCK_GAME_MODE_DATA,
         raise_for_status=lambda: None,
     )
     mock_response_page_2 = Mock(
@@ -44,7 +44,7 @@ async def test_genre_extractor_fetches_and_pages_data(
         mock_response_page_2,
     ]
 
-    extractor = IgdbGenreExtractor(
+    extractor = IgdbGameModeExtractor(
         client=mock_client, auth_provider=mock_auth_provider, client_id="mock-client_id"
     )
 
@@ -53,8 +53,8 @@ async def test_genre_extractor_fetches_and_pages_data(
         results.append(item)
 
     assert len(results) == 2
-    assert results[0]["name"] == "Fighting"
-    assert results[1]["slug"] == "shooter"
+    assert results[0]["name"] == "Single player"
+    assert results[1]["slug"] == "multiplayer"
 
     assert mock_client.post.call_count == 2
 

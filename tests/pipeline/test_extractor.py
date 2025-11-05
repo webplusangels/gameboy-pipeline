@@ -2,11 +2,34 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.pipeline.extractors import IgdbExtractor
+from src.pipeline.extractors import BaseIgdbExtractor, IgdbExtractor
 from src.pipeline.interfaces import AuthProvider, Extractor
 
 
-def test_igdb_extractor_conforms_to_interface():
+@pytest.mark.asyncio
+async def test_base_igdb_extractor_is_abstract(
+    mock_client: AsyncMock, mock_auth_provider: AuthProvider
+):
+    """
+    [GREEN]
+    BaseIgdbExtractor가 추상 속성이나 메서드를 구현하지 않으면
+    TypeError를 발생시키는지 테스트합니다.
+    """
+
+    class IncompleteExtractor(BaseIgdbExtractor):
+        # api_url, base_query, limit 모두 구현 안 함
+        pass
+
+    with pytest.raises(TypeError):
+        IncompleteExtractor(
+            client=mock_client,
+            auth_provider=mock_auth_provider,
+            client_id="test-client-id",
+        )
+
+
+@pytest.mark.asyncio
+async def test_igdb_extractor_conforms_to_interface():
     """
     [GREEN]
     IgdbExtractor가 Extractor 인터페이스를 준수하는지 테스트합니다.
@@ -57,8 +80,8 @@ async def test_igdb_extractor_returns_mock_data(
 
     all_calls = mock_client.post.call_args_list
 
-    base_query = extractor._BASE_QUERY
-    limit = extractor._LIMIT
+    base_query = extractor.base_query
+    limit = extractor.limit
 
     query_page_1 = f"{base_query} limit {limit}; offset 0;"
     query_page_2 = f"{base_query} limit {limit}; offset {limit};"
