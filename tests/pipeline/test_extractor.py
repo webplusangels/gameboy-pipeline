@@ -7,15 +7,21 @@ from src.pipeline.interfaces import AuthProvider, Extractor
 
 
 @pytest.mark.asyncio
-async def test_igdb_extractor_not_implemented(
+async def test_base_igdb_extractor_is_abstract(
     mock_client: AsyncMock, mock_auth_provider: AuthProvider
 ):
     """
     [GREEN]
-    IgdbExtractor의 추상 메서드가 구현되지 않았을 때 NotImplementedError를 발생시키는지 테스트합니다.
+    BaseIgdbExtractor가 추상 속성이나 메서드를 구현하지 않으면
+    TypeError를 발생시키는지 테스트합니다.
     """
-    with pytest.raises(NotImplementedError):
-        BaseIgdbExtractor(
+
+    class IncompleteExtractor(BaseIgdbExtractor):
+        # _API_URL, _BASE_QUERY, _LIMIT 모두 구현 안 함
+        pass
+
+    with pytest.raises(TypeError):
+        IncompleteExtractor(
             client=mock_client,
             auth_provider=mock_auth_provider,
             client_id="test-client-id",
