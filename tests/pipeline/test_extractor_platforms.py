@@ -11,7 +11,7 @@ MOCK_PLATFORM_DATA = [
 @pytest.mark.asyncio
 async def test_platform_extractor_conforms_to_interface():
     """
-    [RED]
+    [GREEN]
     IgdbPlatformExtractor가 Extractor 인터페이스를 준수하는지 테스트합니다.
     """
     assert issubclass(IgdbPlatformExtractor, Extractor)
@@ -20,7 +20,7 @@ async def test_platform_extractor_conforms_to_interface():
 @pytest.mark.asyncio
 async def test_platform_extractor_fetches_and_pages_data(mocker):
     """
-    [RED]
+    [GREEN]
     IgdbPlatformExtractor가 'platforms' 엔드포인트에서
     올바르게 데이터를 페칭하고 페이지네이션하는지 테스트합니다.
     """
