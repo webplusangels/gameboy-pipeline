@@ -172,3 +172,19 @@ class IgdbPlayerPerspectiveExtractor(BaseIgdbExtractor):
     @property
     def limit(self) -> int:
         return 50
+
+
+class IgdbThemeExtractor(BaseIgdbExtractor):
+    """IGDB API로부터 테마 데이터를 추출하는 Extractor 구현체."""
+
+    @property
+    def api_url(self) -> str:
+        return "https://api.igdb.com/v4/themes"
+
+    @property
+    def base_query(self) -> str:
+        return "fields *;"
+
+    @property
+    def limit(self) -> int:
+        return 50
