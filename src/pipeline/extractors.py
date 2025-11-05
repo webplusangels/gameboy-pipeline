@@ -156,3 +156,19 @@ class IgdbGameModeExtractor(BaseIgdbExtractor):
     @property
     def limit(self) -> int:
         return 50
+
+
+class IgdbPlayerPerspectiveExtractor(BaseIgdbExtractor):
+    """IGDB API로부터 플레이어 시점 데이터를 추출하는 Extractor 구현체."""
+
+    @property
+    def api_url(self) -> str:
+        return "https://api.igdb.com/v4/player_perspectives"
+
+    @property
+    def base_query(self) -> str:
+        return "fields *;"
+
+    @property
+    def limit(self) -> int:
+        return 50
