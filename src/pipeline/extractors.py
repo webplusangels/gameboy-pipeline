@@ -112,3 +112,11 @@ class IgdbGenreExtractor(BaseIgdbExtractor):
     _API_URL = "https://api.igdb.com/v4/genres"
     _BASE_QUERY = "fields *;"
     _LIMIT = 50
+
+
+class IgdbGameModeExtractor(BaseIgdbExtractor):
+    """IGDB API로부터 게임 모드 데이터를 추출하는 Extractor 구현체."""
+
+    _API_URL = "https://api.igdb.com/v4/game_modes"
+    _BASE_QUERY = "fields *;"
+    _LIMIT = 50

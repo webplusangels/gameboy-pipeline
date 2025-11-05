@@ -14,7 +14,7 @@ MOCK_GAME_MODE_DATA = [
 @pytest.mark.asyncio
 async def test_game_mode_extractor_conforms_to_interface():
     """
-    [RED]
+    [GREEN]
     IgdbGameModeExtractor가 Extractor 인터페이스를 준수하는지 테스트합니다.
     """
     assert issubclass(IgdbGameModeExtractor, Extractor)
@@ -25,7 +25,7 @@ async def test_game_mode_extractor_fetches_and_pages_data(
     mocker, mock_client: AsyncMock, mock_auth_provider: AuthProvider
 ):
     """
-    [RED]
+    [GREEN]
     IgdbGameModeExtractor가 'game_modes' 엔드포인트에서
     올바르게 데이터를 페칭하고 페이지네이션하는지 테스트합니다.
     """
