@@ -87,7 +87,7 @@ class BaseIgdbExtractor(Extractor):
                 logger.error(
                     f"IGDB {class_name} 데이터 추출 중 오류 발생 (offset={offset}): {e}"
                 )
-                raise e
+                raise
 
 
 class IgdbExtractor(BaseIgdbExtractor):
