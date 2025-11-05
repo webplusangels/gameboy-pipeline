@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -6,16 +7,27 @@ from loguru import logger
 from src.pipeline.interfaces import AuthProvider, Extractor
 
 
-class BaseIgdbExtractor(Extractor):
+class BaseIgdbExtractor(Extractor, ABC):
     """
     IGDB API Extractor의 공통 로직 베이스 클래스.
     페이징, 인증, 헤더 설정 등을 처리합니다.
     """
 
     # === 서브클래스에서 정의해야 하는 속성 ===
-    _API_URL: str
-    _BASE_QUERY: str
-    _LIMIT: int
+    @property
+    @abstractmethod
+    def _API_URL(self) -> str:
+        pass
+
+    @property
+    @abstractmethod
+    def _BASE_QUERY(self) -> str:
+        pass
+
+    @property
+    @abstractmethod
+    def _LIMIT(self) -> int:
+        pass
 
     def __init__(
         self,
@@ -32,15 +44,6 @@ class BaseIgdbExtractor(Extractor):
         self._client = client
         self._auth_provider = auth_provider
         self._client_id = client_id
-
-        if (
-            not hasattr(self, "_API_URL")
-            or not hasattr(self, "_BASE_QUERY")
-            or not hasattr(self, "_LIMIT")
-        ):
-            raise NotImplementedError(
-                "서브클래스에서 _API_URL, _BASE_QUERY, _LIMIT 속성을 정의해야 합니다."
-            )
 
     async def extract(self) -> AsyncGenerator[dict[str, Any], None]:
         """
