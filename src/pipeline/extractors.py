@@ -3,8 +3,7 @@ from typing import Any
 
 from loguru import logger
 
-from src.pipeline.auth import AuthProvider
-from src.pipeline.interfaces import Extractor
+from src.pipeline.interfaces import AuthProvider, Extractor
 
 
 class BaseIgdbExtractor(Extractor):
