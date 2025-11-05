@@ -68,7 +68,7 @@ async def test_platform_extractor_fetches_and_pages_data(mocker):
     query_page_2 = f"{base_query} limit {limit}; offset {limit};"
 
     assert all_calls[0].kwargs["url"] == api_url
-    assert all_calls[0].kwargs["data"] == query_page_1
+    assert all_calls[0].kwargs["content"] == query_page_1
 
     assert all_calls[1].kwargs["url"] == api_url
-    assert all_calls[1].kwargs["data"] == query_page_2
+    assert all_calls[1].kwargs["content"] == query_page_2
