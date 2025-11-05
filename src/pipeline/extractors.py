@@ -16,17 +16,20 @@ class BaseIgdbExtractor(Extractor, ABC):
     # === 서브클래스에서 정의해야 하는 속성 ===
     @property
     @abstractmethod
-    def _API_URL(self) -> str:
+    def api_url(self) -> str:
+        """API 엔드포인트 URL."""
         pass
 
     @property
     @abstractmethod
-    def _BASE_QUERY(self) -> str:
+    def base_query(self) -> str:
+        """기본 쿼리 문자열."""
         pass
 
     @property
     @abstractmethod
-    def _LIMIT(self) -> int:
+    def limit(self) -> int:
+        """페이지당 데이터 제한 개수."""
         pass
 
     def __init__(
@@ -65,14 +68,12 @@ class BaseIgdbExtractor(Extractor, ABC):
         # === 페이징을 통한 데이터 추출 ===
         offset = 0
         while True:
-            paginated_query = (
-                f"{self._BASE_QUERY} limit {self._LIMIT}; offset {offset};"
-            )
+            paginated_query = f"{self.base_query} limit {self.limit}; offset {offset};"
             logger.debug(f"{class_name} - API 요청: {paginated_query}")
 
             try:
                 response = await self._client.post(
-                    url=self._API_URL, content=paginated_query, headers=headers
+                    url=self.api_url, content=paginated_query, headers=headers
                 )
                 response.raise_for_status()
                 response_data = response.json()
@@ -84,7 +85,7 @@ class BaseIgdbExtractor(Extractor, ABC):
                 for item in response_data:
                     yield item
 
-                offset += self._LIMIT
+                offset += self.limit
 
             except Exception as e:
                 logger.error(
@@ -96,30 +97,62 @@ class BaseIgdbExtractor(Extractor, ABC):
 class IgdbExtractor(BaseIgdbExtractor):
     """IGDB API로부터 게임 데이터를 추출하는 Extractor 구현체."""
 
-    _API_URL = "https://api.igdb.com/v4/games"
-    _BASE_QUERY = "fields *;"
-    _LIMIT = 500
+    @property
+    def api_url(self) -> str:
+        return "https://api.igdb.com/v4/games"
+
+    @property
+    def base_query(self) -> str:
+        return "fields *;"
+
+    @property
+    def limit(self) -> int:
+        return 500
 
 
 class IgdbPlatformExtractor(BaseIgdbExtractor):
     """IGDB API로부터 플랫폼 데이터를 추출하는 Extractor 구현체."""
 
-    _API_URL = "https://api.igdb.com/v4/platforms"
-    _BASE_QUERY = "fields *;"
-    _LIMIT = 50
+    @property
+    def api_url(self) -> str:
+        return "https://api.igdb.com/v4/platforms"
+
+    @property
+    def base_query(self) -> str:
+        return "fields *;"
+
+    @property
+    def limit(self) -> int:
+        return 50
 
 
 class IgdbGenreExtractor(BaseIgdbExtractor):
     """IGDB API로부터 장르 데이터를 추출하는 Extractor 구현체."""
 
-    _API_URL = "https://api.igdb.com/v4/genres"
-    _BASE_QUERY = "fields *;"
-    _LIMIT = 50
+    @property
+    def api_url(self) -> str:
+        return "https://api.igdb.com/v4/genres"
+
+    @property
+    def base_query(self) -> str:
+        return "fields *;"
+
+    @property
+    def limit(self) -> int:
+        return 50
 
 
 class IgdbGameModeExtractor(BaseIgdbExtractor):
     """IGDB API로부터 게임 모드 데이터를 추출하는 Extractor 구현체."""
 
-    _API_URL = "https://api.igdb.com/v4/game_modes"
-    _BASE_QUERY = "fields *;"
-    _LIMIT = 50
+    @property
+    def api_url(self) -> str:
+        return "https://api.igdb.com/v4/game_modes"
+
+    @property
+    def base_query(self) -> str:
+        return "fields *;"
+
+    @property
+    def limit(self) -> int:
+        return 50

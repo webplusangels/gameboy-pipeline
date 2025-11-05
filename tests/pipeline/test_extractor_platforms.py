@@ -60,9 +60,9 @@ async def test_platform_extractor_fetches_and_pages_data(
 
     all_calls = mock_client.post.call_args_list
 
-    api_url = extractor._API_URL
-    base_query = extractor._BASE_QUERY
-    limit = extractor._LIMIT
+    api_url = extractor.api_url
+    base_query = extractor.base_query
+    limit = extractor.limit
 
     query_page_1 = f"{base_query} limit {limit}; offset 0;"
     query_page_2 = f"{base_query} limit {limit}; offset {limit};"

@@ -17,7 +17,7 @@ async def test_base_igdb_extractor_is_abstract(
     """
 
     class IncompleteExtractor(BaseIgdbExtractor):
-        # _API_URL, _BASE_QUERY, _LIMIT 모두 구현 안 함
+        # api_url, base_query, limit 모두 구현 안 함
         pass
 
     with pytest.raises(TypeError):
@@ -80,8 +80,8 @@ async def test_igdb_extractor_returns_mock_data(
 
     all_calls = mock_client.post.call_args_list
 
-    base_query = extractor._BASE_QUERY
-    limit = extractor._LIMIT
+    base_query = extractor.base_query
+    limit = extractor.limit
 
     query_page_1 = f"{base_query} limit {limit}; offset 0;"
     query_page_2 = f"{base_query} limit {limit}; offset {limit};"
