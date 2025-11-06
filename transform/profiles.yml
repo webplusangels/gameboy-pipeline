@@ -1,0 +1,20 @@
+transform:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # S3에서 읽어오는 DuckDB 확장 기능 로드
+      # .env 환경 변수 설정 사용
+      extensions:
+        - s3
+      settings:
+        s3_region: "{{ env_var('AWS_DEFAULT_REGION') }}"
+        s3_access_key_id: "{{ env_var('AWS_ACCESS_KEY_ID') }}"
+        s3_secret_access_key: "{{ env_var('AWS_SECRET_ACCESS_KEY') }}"
+      attach:
+        - path: "s3://{{ env_var('S3_BUCKET_NAME') }}/raw/games/*.jsonl"
+          alias: "raw_data_games"
+          format: "json"
+        - path: "s3://{{ env_var('S3_BUCKET_NAME') }}/raw/platforms/*.jsonl"
+          alias: "raw_data_platforms"
+          format: "json"
