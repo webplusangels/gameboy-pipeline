@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: dim_games
+    description: "게임과 차원 데이터를 조합한 마트 테이블"
+    columns:
+      - name: game_id
+        description: "게임 고유 ID"
+        tests:
+          - not_null
+          - unique
+      - name: game_name
+        description: "게임 이름"
+      - name: game_summary
+        description: "게임 요약 정보"
+      - name: platform_names
+        description: "플랫폼 이름"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              arguments:
+                column_type: "VARCHAR[]"
+      - name: genre_names
+        description: "장르 이름"
+      - name: game_mode_names
+        description: "게임 모드 이름"
+      - name: theme_names
+        description: "테마 이름"
+      - name: player_perspectives
+        description: "플레이어 시점"
