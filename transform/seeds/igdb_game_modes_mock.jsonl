@@ -1,0 +1,6 @@
+{"id": 1, "created_at": 1298968834, "name": "Single player", "slug": "single-player", "updated_at": 1323289216, "url": "https://www.igdb.com/game_modes/single-player", "checksum": "1cc07088-c5fb-3cb2-9e68-af6620c18836"}
+{"id": 2, "created_at": 1298968853, "name": "Multiplayer", "slug": "multiplayer", "updated_at": 1323289216, "url": "https://www.igdb.com/game_modes/multiplayer", "checksum": "3ffef62b-e19f-6bab-d510-98385c06d902"}
+{"id": 3, "created_at": 1298968887, "name": "Co-operative", "slug": "co-operative", "updated_at": 1323289216, "url": "https://www.igdb.com/game_modes/co-operative", "checksum": "d154173b-5bdf-5fda-5969-e4c87e135d1a"}
+{"id": 4, "created_at": 1298968900, "name": "Split screen", "slug": "split-screen", "updated_at": 1323289216, "url": "https://www.igdb.com/game_modes/split-screen", "checksum": "a165517f-f166-79cb-1290-d8c8d4f157a8"}
+{"id": 5, "created_at": 1298969041, "name": "Massively Multiplayer Online (MMO)", "slug": "massively-multiplayer-online-mmo", "updated_at": 1323289216, "url": "https://www.igdb.com/game_modes/massively-multiplayer-online-mmo", "checksum": "631ae92b-e28d-8089-dd44-48cd2febf4ea"}
+{"id": 6, "created_at": 1588855506, "name": "Battle Royale", "slug": "battle-royale", "updated_at": 1588855506, "url": "https://www.igdb.com/game_modes/battle-royale", "checksum": "bf9864c2-5d73-bc3a-c90b-3da8debd3292"}

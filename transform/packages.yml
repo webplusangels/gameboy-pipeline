@@ -1,0 +1,8 @@
+packages:
+  # dbt-utils: 일반적인 유틸리티 매크로 (집계, 조인 테스트 등)
+  - package: dbt-labs/dbt_utils
+    version: 1.3.0
+
+  # dbt-expectations: Great Expectations 스타일의 고급 데이터 품질 테스트
+  - package: calogica/dbt_expectations
+    version: 0.10.4

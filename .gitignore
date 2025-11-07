@@ -54,7 +54,7 @@ outputs/
 *.sqlite3
 
 # ML models & checkpoints
-models/
+# models/
 checkpoints/
 *.pt
 *.pth

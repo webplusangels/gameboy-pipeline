@@ -615,3 +615,113 @@ class IgdbPlatformExtractor(BaseIgdbExtractor):
 제가 목표로 삼은 소프트웨어가 작게 시작해서 테스트로 검증하며 점진적으로 확장하는 방식이기 때문에 이렇게 결정했습니다.
 
 다음 단계로 Transform을 구현하도록 하겠습니다.
+
+## `dbt` 초기 과정
+
+2025-11-07
+
+> [!WARNING]
+> `dbt`를 완전히 처음 접했을 때의 과정
+
+### 문제 & 해결
+
+`dbt`를 처음 접하면 사실 문제가 뭔지도 파악할 수 없는 상황에 놓일 가능성이 높습니다. 저 같은 경우에는 엔터프라이즈급 데이터 파이프라인에서나, 경량 파이프라인에 Transform에 표준적으로 쓰이는 기술 스택이라고 언급되었기 때문에 사용해보자고 생각했고, 실제 Transform 과정을 Python 스크립트로 짰을 때 엄청나게 고통을 받았던 경험이 있기 때문에 이 문제를 어떻게 효율적으로 풀어 나갔는지도 궁금했습니다. (자세한 이유는 [참고](./02_Tech_Stacks.md#dbt))
+
+다만 개인적인 인상으로는 `dbt`가 어떤 구조를 통해 데이터 변환 과정을 구조화하려고 했는지는 알겠으나 처음 접할 때의 Transform 레이어 구성을 보면 직관적이라는 단어와는 거리가 멀다고 할 수 있습니다.
+
+큰 그림을 봤을 때, 제가 파악한 `dbt`의 초기 작업 과정은 다음과 같습니다.
+
+1. 프로젝트 내에서 `dbt-<adapter>`(프로젝트에서는 `DuckDB` 사용) 의존성을 설치하고 초기화
+2. 환경 설정 - `dbt_project.yml`과 `~/.dbt/profiles.yml`, `models/schema.yml`등을 통해 로컬/S3 환경 분리나 테스트할 컬럼의 구조 등을 설정
+3. Mock 데이터나 프로젝트 내의 `/seeds`를 사용한 테스트를 통해 데이터 구조를 검증
+4. 실제 데이터를 연결하는 작업을 `SQL`과 `Jinja`를 통해 작성한다.
+5. (테스트 환경과 실제 환경을 분리했다면)`dbt run --target [ENV]`로 데이터 웨어하우스에 모델을 빌드하고, `dbt test --target [ENV]`로 결과물을 테스트
+
+저는 환경을 두 가지로 나누었습니다. 개발과 테스트 과정에서도 매번 S3에서 진행할 수는 없었기 때문입니다.
+
+- `dev_local_tdd`
+- `prod_s3`
+
+다음은 초기 작업 과정 중 생긴 문제들입니다.
+
+첫 번째로 환경 설정 과정에서 `profiles.yml`의 위치가 어디에 존재해야 하는지에 대한 혼선이 있었습니다. 결과적으로 `profiles.yml`는 사용자 개인의 홈 디렉토리 `~/.dbt/`에 존재해야 합니다. 이는 보안과 이식성을 고려한 것으로 git에서 관리하지 않는 파일입니다.
+
+두 번째로 `attach` 설정의 존재 위치입니다. 해당 설정은 실제 목 데이터를 바탕으로 테스트 데이터를 만들기 위해 `dev_local_tdd` 환경에 생성하려고 했으나 해당 설정에 대한 문법에 대해 확실하지 않아 여러 가지로 시도해 본 결과, `attach` 설정을 포기하고 아래와 같이 직접 SQL에서 `read_json_auto()` 함수를 사용하는 것으로 결정했습니다.
+
+```sql
+{% if target.name == 'dev_local_tdd' %}
+SELECT id, name
+FROM read_json_auto('seeds/igdb_games_mock.jsonl')
+```
+
+해당 소스 코드는 Jinja 템플릿으로 환경별 데이터 소스를 분기하고, DuckDB에서 네이티브로 지원하는 `read_json_auto()`를 통해 json파일을 자동을 읽게 했습니다.
+
+## 결과
+
+지금까지 완료한 `dbt`의 실행 흐름을 요약하자면 다음과 같습니다.
+
+```plain
+1. 사용자 명령
+   └─> uv run dbt run --target dev_local_tdd
+
+2. dbt 초기화
+   ├─> profiles.yml 읽기
+   │   └─> dev_local_tdd 타겟 선택
+   │       └─> type: duckdb, path: tdd_warehouse.db
+   │
+   └─> dbt_project.yml 읽기
+       └─> models/staging/*.sql 찾기
+
+3. 모델 컴파일
+   ├─> stg_games.sql 읽기
+   ├─> Jinja 템플릿 처리
+   │   └─> target.name == 'dev_local_tdd' → True
+   │       └─> read_json_auto('seeds/igdb_games_mock.jsonl')
+   │
+   └─> 최종 SQL 생성
+       └─> target/compiled/transform/models/staging/stg_games.sql
+
+4. SQL 실행
+   ├─> DuckDB 연결: tdd_warehouse.db
+   ├─> CREATE VIEW main.stg_games AS
+   │   └─> SELECT id, name FROM read_json_auto('seeds/...')
+   │
+   └─> DuckDB가 JSONL 파일 읽기
+       └─> 스키마 자동 감지
+           └─> VIEW 생성 완료
+
+5. 결과 출력
+   └─> ✅ Done. PASS=1 WARN=0 ERROR=0
+```
+
+그리고 `attach` 삽질을 통해 깨달은 두 설정 파일의 역할은 다음과 같습니다.
+
+**profiles.yml (Connection):**
+
+- WHERE: 어디에 연결할지
+- HOW: 어떻게 인증할지
+- WHEN: 어떤 환경인지
+
+```yaml
+outputs:
+  dev_local_tdd:
+    type: duckdb
+    path: tdd_warehouse.db # 어디에 저장할지
+```
+
+**dbt_project.yml (Configuration):**
+
+- WHAT: 무엇을 빌드할지
+- HOW: 어떻게 빌드할지 (materialization)
+- WHERE: 모델 파일이 어디 있는지
+
+```yaml
+models:
+  transform:
+    staging:
+      +materialized: view # 어떻게 빌드할지
+```
+
+이 후 SQL을 통해 DuckDB가 성공적으로 `jsonl` 파일을 파싱하고, View를 생성한 것을 확인한 후, EL 작업이 연결된 다른 차원 테이블의 응답 `json` 파일을 실제로 변환해 같은 구조로 정리하였습니다.
+
+여기서 그치지 않고 bridge sql을 통해 차원 테이블과 팩트 테이블(`games`)의 값을 연결하는 테스트와 실제 View를 생성해 데이터 마트 작업에 대한 준비를 마쳤습니다.

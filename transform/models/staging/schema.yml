@@ -1,0 +1,219 @@
+version: 2
+
+# 원시 데이터 소스 정의 (문서화 목적)
+# 실제로는 각 모델에서 read_json_auto()를 직접 사용합니다
+sources:
+  - name: raw_data
+    description: "JSONL 형식의 원시 데이터 (로컬 또는 S3)"
+
+    tables:
+      - name: games
+        description: "원시 게임 데이터"
+
+      - name: platforms
+        description: "원시 플랫폼 데이터"
+
+      - name: genres
+        description: "원시 장르 데이터"
+
+      - name: game_modes
+        description: "원시 게임 모드 데이터"
+
+      - name: player_perspectives
+        description: "원시 플레이어 시점 데이터"
+
+      - name: themes
+        description: "원시 테마 데이터"
+
+# Staging 모델 정의
+models:
+  - name: stg_games
+    description: "정제된 게임 데이터"
+    columns:
+      - name: id
+        description: "게임 고유 ID"
+        tests:
+          - not_null
+          - unique
+      - name: name
+        description: "게임 이름"
+        tests:
+          - not_null
+
+  - name: stg_platforms
+    description: "정제된 플랫폼 데이터"
+    columns:
+      - name: id
+        description: "플랫폼 고유 ID"
+        tests:
+          - not_null
+          - unique
+      - name: name
+        description: "플랫폼 이름"
+        tests:
+          - not_null
+      - name: slug
+        description: "플랫폼 슬러그 (URL 친화적 이름)"
+      - name: generation
+        description: "세대 번호 (예: 3세대, 4세대)"
+
+  - name: stg_genres
+    description: "정제된 장르 데이터"
+    columns:
+      - name: id
+        description: "장르 고유 ID"
+        tests:
+          - not_null
+          - unique
+      - name: name
+        description: "장르 이름"
+        tests:
+          - not_null
+      - name: slug
+        description: "장르 슬러그"
+
+  - name: stg_game_modes
+    description: "정제된 게임 모드 데이터 (싱글플레이, 멀티플레이 등)"
+    columns:
+      - name: id
+        description: "게임 모드 고유 ID"
+        tests:
+          - not_null
+          - unique
+      - name: name
+        description: "게임 모드 이름"
+        tests:
+          - not_null
+      - name: slug
+        description: "게임 모드 슬러그"
+
+  - name: stg_player_perspectives
+    description: "정제된 플레이어 시점 데이터 (1인칭, 3인칭 등)"
+    columns:
+      - name: id
+        description: "플레이어 시점 고유 ID"
+        tests:
+          - not_null
+          - unique
+      - name: name
+        description: "플레이어 시점 이름"
+        tests:
+          - not_null
+      - name: slug
+        description: "플레이어 시점 슬러그"
+
+  - name: stg_themes
+    description: "정제된 테마 데이터 (SF, 판타지 등)"
+    columns:
+      - name: id
+        description: "테마 고유 ID"
+        tests:
+          - not_null
+          - unique
+      - name: name
+        description: "테마 이름"
+        tests:
+          - not_null
+      - name: slug
+        description: "테마 슬러그"
+
+  # === 브릿지 테이블 (다대다 관계) ===
+  - name: stg_game_genre_bridge
+    description: "게임-장르 다대다 관계 브릿지 테이블"
+    columns:
+      - name: game_id
+        description: "게임 ID"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_games')
+                field: id
+      - name: genre_id
+        description: "장르 ID"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_genres')
+                field: id
+
+  - name: stg_game_platform_bridge
+    description: "게임-플랫폼 다대다 관계 브릿지 테이블"
+    columns:
+      - name: game_id
+        description: "게임 ID"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_games')
+                field: id
+      - name: platform_id
+        description: "플랫폼 ID"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_platforms')
+                field: id
+
+  - name: stg_game_mode_bridge
+    description: "게임-게임모드 다대다 관계 브릿지 테이블"
+    columns:
+      - name: game_id
+        description: "게임 ID"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_games')
+                field: id
+      - name: game_mode_id
+        description: "게임 모드 ID"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_game_modes')
+                field: id
+
+  - name: stg_game_perspective_bridge
+    description: "게임-플레이어시점 다대다 관계 브릿지 테이블"
+    columns:
+      - name: game_id
+        description: "게임 ID"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_games')
+                field: id
+      - name: perspective_id
+        description: "플레이어 시점 ID"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_player_perspectives')
+                field: id
+
+  - name: stg_game_theme_bridge
+    description: "게임-테마 다대다 관계 브릿지 테이블"
+    columns:
+      - name: game_id
+        description: "게임 ID"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_games')
+                field: id
+      - name: theme_id
+        description: "테마 ID"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_themes')
+                field: id
