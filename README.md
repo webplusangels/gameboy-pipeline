@@ -6,11 +6,9 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![uv](https://img.shields.io/badge/uv-latest-purple.svg)](https://github.com/astral-sh/uv)
 
-## 타임라인
+## 결과물 [Demo]
 
-**2025.11**
-
-[IGDB API](https://www.igdb.com/)를 활용한 단순한 ELT 파이프라인입니다.
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](.)
 
 ## 왜 만들었는가
 
@@ -42,15 +40,23 @@
 
 ## 아키텍처 다이어그램
 
-## 주요 특징
+## 성능 요약
 
 ## Quick Start
 
 ## 링크
 
-- [개발 방식](./CONTRIBUTING.md)
 - [01. 아키텍처](./docs/01_Architectures.md)
 - [02. 기술 스택](./docs/02_Tech_Stacks.md)
 - [03. 학습 기록](./docs/03_Learning_Log.md)
+- [04. 성능 측정](./docs/04_Performance.md)
+- [개발 방식](./CONTRIBUTING.md)
 
-## 데모
+## 타임라인
+
+- **2025.11.01**: [IGDB API](https://www.igdb.com/)를 활용한 ELT 파이프라인 개발 시작
+- **2025.11.03**: Extractor 모듈
+- **2025.11.04**: Loader 모듈
+- **2025.11.05**: 차원 데이터를 위한 Extractor로 확장
+- **2025.11.07**: `dbt` Transform 레이어
+- **2025.11.08**: E2E 테스트
