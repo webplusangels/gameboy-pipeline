@@ -17,20 +17,18 @@ class BaseIgdbExtractor(Extractor, ABC):
     @property
     @abstractmethod
     def api_url(self) -> str:
-        """API 엔드포인트 URL."""
+        """API 엔드포인트 URL. 서브클래스에서 정의해야 함."""
         pass
 
     @property
-    @abstractmethod
     def base_query(self) -> str:
-        """기본 쿼리 문자열."""
-        pass
+        """기본 쿼리 문자열. 기본 값 정의."""
+        return "fields *; sort id asc;"
 
     @property
-    @abstractmethod
     def limit(self) -> int:
-        """페이지당 데이터 제한 개수."""
-        pass
+        """페이지당 데이터 제한 개수. 기본 값 정의."""
+        return 500
 
     def __init__(
         self,
@@ -101,14 +99,6 @@ class IgdbExtractor(BaseIgdbExtractor):
     def api_url(self) -> str:
         return "https://api.igdb.com/v4/games"
 
-    @property
-    def base_query(self) -> str:
-        return "fields *;"
-
-    @property
-    def limit(self) -> int:
-        return 500
-
 
 class IgdbPlatformExtractor(BaseIgdbExtractor):
     """IGDB API로부터 플랫폼 데이터를 추출하는 Extractor 구현체."""
@@ -116,14 +106,6 @@ class IgdbPlatformExtractor(BaseIgdbExtractor):
     @property
     def api_url(self) -> str:
         return "https://api.igdb.com/v4/platforms"
-
-    @property
-    def base_query(self) -> str:
-        return "fields *;"
-
-    @property
-    def limit(self) -> int:
-        return 50
 
 
 class IgdbGenreExtractor(BaseIgdbExtractor):
@@ -133,15 +115,6 @@ class IgdbGenreExtractor(BaseIgdbExtractor):
     def api_url(self) -> str:
         return "https://api.igdb.com/v4/genres"
 
-    @property
-    def base_query(self) -> str:
-        return "fields *;"
-
-    @property
-    def limit(self) -> int:
-        return 50
-
-
 class IgdbGameModeExtractor(BaseIgdbExtractor):
     """IGDB API로부터 게임 모드 데이터를 추출하는 Extractor 구현체."""
 
@@ -149,13 +122,6 @@ class IgdbGameModeExtractor(BaseIgdbExtractor):
     def api_url(self) -> str:
         return "https://api.igdb.com/v4/game_modes"
 
-    @property
-    def base_query(self) -> str:
-        return "fields *;"
-
-    @property
-    def limit(self) -> int:
-        return 50
 
 
 class IgdbPlayerPerspectiveExtractor(BaseIgdbExtractor):
@@ -165,13 +131,6 @@ class IgdbPlayerPerspectiveExtractor(BaseIgdbExtractor):
     def api_url(self) -> str:
         return "https://api.igdb.com/v4/player_perspectives"
 
-    @property
-    def base_query(self) -> str:
-        return "fields *;"
-
-    @property
-    def limit(self) -> int:
-        return 50
 
 
 class IgdbThemeExtractor(BaseIgdbExtractor):
@@ -181,10 +140,4 @@ class IgdbThemeExtractor(BaseIgdbExtractor):
     def api_url(self) -> str:
         return "https://api.igdb.com/v4/themes"
 
-    @property
-    def base_query(self) -> str:
-        return "fields *;"
 
-    @property
-    def limit(self) -> int:
-        return 50
