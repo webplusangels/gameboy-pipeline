@@ -1,4 +1,5 @@
--- 게임-플레이어시점 다대다 관계 브릿지 테이블
+-- 게임-게임모드 다대다 관계 브릿지 테이블
+
 {% if target.name == 'dev_local_tdd' %}
 WITH raw_games AS (
   SELECT * FROM read_json_auto('seeds/igdb_games_mock.jsonl')
@@ -11,7 +12,7 @@ WITH raw_games AS (
 
 SELECT
   id AS game_id,
-  UNNEST(player_perspectives) AS perspective_id
+  UNNEST(game_modes) AS game_mode_id
 FROM raw_games
-WHERE player_perspectives IS NOT NULL
-  AND len(player_perspectives) > 0
+WHERE game_modes IS NOT NULL
+  AND len(game_modes) > 0

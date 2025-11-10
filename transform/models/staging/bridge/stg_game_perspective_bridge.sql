@@ -1,5 +1,5 @@
--- 게임-장르 다대다 관계 브릿지 테이블
--- 배열 필드를 행으로 펼쳐서 관계형 데이터로 변환
+-- 게임-플레이어시점 다대다 관계 브릿지 테이블
+
 {% if target.name == 'dev_local_tdd' %}
 WITH raw_games AS (
   SELECT * FROM read_json_auto('seeds/igdb_games_mock.jsonl')
@@ -12,7 +12,7 @@ WITH raw_games AS (
 
 SELECT
   id AS game_id,
-  UNNEST(genres) AS genre_id  -- 배열을 행으로 펼치기
+  UNNEST(player_perspectives) AS perspective_id
 FROM raw_games
-WHERE genres IS NOT NULL
-  AND len(genres) > 0  -- 빈 배열 제외
+WHERE player_perspectives IS NOT NULL
+  AND len(player_perspectives) > 0

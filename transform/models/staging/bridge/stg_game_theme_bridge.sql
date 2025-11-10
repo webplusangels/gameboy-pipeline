@@ -1,4 +1,5 @@
--- 게임-플랫폼 다대다 관계 브릿지 테이블
+-- 게임-테마 다대다 관계 브릿지 테이블
+
 {% if target.name == 'dev_local_tdd' %}
 WITH raw_games AS (
   SELECT * FROM read_json_auto('seeds/igdb_games_mock.jsonl')
@@ -11,7 +12,7 @@ WITH raw_games AS (
 
 SELECT
   id AS game_id,
-  UNNEST(platforms) AS platform_id
+  UNNEST(themes) AS theme_id
 FROM raw_games
-WHERE platforms IS NOT NULL
-  AND len(platforms) > 0
+WHERE themes IS NOT NULL
+  AND len(themes) > 0
