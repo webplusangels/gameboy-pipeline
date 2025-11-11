@@ -10,6 +10,18 @@
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](.)
 
+<details>
+
+<summary>`dbt` 리니지 그래프</summary>
+
+**2025.11.10 - 초기 모델**
+
+![2025.11.10](./docs/imgs/202511101913-Lineage-Graph.png)
+
+</details>
+
+## 아키텍처 다이어그램
+
 ## 왜 만들었는가
 
 > **문제:** 기존 [game-pricing-pipeline](링크)에서 경험한 유지보수의 어려움  
@@ -38,8 +50,6 @@
 
 자세한 설명은 [참조](./docs/01_Architectures.md)해주세요.
 
-## 아키텍처 다이어그램
-
 ## 성능 요약
 
 ## Quick Start
@@ -60,5 +70,6 @@
 - **2025.11.05**: 차원 데이터를 위한 Extractor로 확장
 - **2025.11.07**: `dbt` Transform 레이어
 - **2025.11.08**: E2E 테스트
-- **2025.11.10**: 오케스트레이션 스크립트 작성
-- **2025.11.10**: `Streamlit` 시각화 호스팅
+- **2025.11.10**: 벤치마크 테스트
+- **2025.11.11**: 오케스트레이션 스크립트 작성
+- **2025.11.11**: `Streamlit` 시각화 호스팅
