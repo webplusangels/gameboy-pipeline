@@ -1,6 +1,21 @@
+-- 0. 설정
+{{
+    config(
+        materialized = 'view' if target.name == 'dev_local_tdd' else 'incremental',
+
+        unique_key = 'game_id',
+
+        on_schema_change = 'append_new_columns'
+    )
+}}
+
 -- 1. TDD로 검증된 Staging(재료) 테이블들을 불러옵니다.
 with games as (
     select * from {{ ref('stg_games') }}
+    {% if is_incremental() %}
+    -- 증분 모드: 마지막 실행 이후 업데이트된 게임만 처리
+    where updated_at > (select max(updated_at) from {{ this }})
+    {% endif %}
 ),
 
 platforms as (
@@ -96,24 +111,29 @@ player_perspectives_agg as (
 )
 
 -- 4. 최종: games 테이블에 모든 '배열' 컬럼들을 JOIN합니다.
-select
-    g.id as game_id,
-    g.name as game_name,
-    g.summary as game_summary,
-    p.platform_names, -- (2단계에서 만든 'platform_names' 배열)
-    gn.genre_names,   -- (3단계에서 만든 'genre_names' 배열)
-    gm.game_mode_names,
-    gt.theme_names,
-    pp.perspective_names
-    
-from games as g
-left join platforms_agg as p
-    on g.id = p.game_id
-left join genres_agg as gn
-    on g.id = gn.game_id
-left join game_modes_agg as gm
-    on g.id = gm.game_id
-left join game_themes_agg as gt
-    on g.id = gt.game_id
-left join player_perspectives_agg as pp
-    on g.id = pp.game_id
+final as (
+    select
+        g.id as game_id,
+        g.name as game_name,
+        g.summary as game_summary,
+        p.platform_names, -- (2단계에서 만든 'platform_names' 배열)
+        gn.genre_names,   -- (3단계에서 만든 'genre_names' 배열)
+        gm.game_mode_names,
+        gt.theme_names,
+        pp.perspective_names,
+        g.updated_at
+        
+    from games as g
+    left join platforms_agg as p
+        on g.id = p.game_id
+    left join genres_agg as gn
+        on g.id = gn.game_id
+    left join game_modes_agg as gm
+        on g.id = gm.game_id
+    left join game_themes_agg as gt
+        on g.id = gt.game_id
+    left join player_perspectives_agg as pp
+        on g.id = pp.game_id
+)
+
+select * from final

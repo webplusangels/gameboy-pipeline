@@ -52,7 +52,7 @@ class BaseIgdbExtractor(Extractor, ABC):
         
         예: last_updated_at = 10:00, safety_margin = 5
         → 쿼리: "where updated_at > 09:55"
-        → 중복 허용, 누락 방지 (dbt에서 DISTINCT 처리)
+        → 중복 허용, 누락 방지 (dbt에서 incremental 처리)
         """
         return 5
 
