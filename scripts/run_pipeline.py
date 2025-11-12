@@ -131,6 +131,7 @@ async def run_entity_pipeline(
     s3_client: Any,
     bucket_name: str,
     entity_name: str,
+    dt_partition: str,
     full_refresh: bool = False,
 ) -> None:
     """
@@ -150,9 +151,6 @@ async def run_entity_pipeline(
     
     # 추출 시작 시간 기록 (State 저장 기준점)
     extraction_start = datetime.now(timezone.utc)
-    
-    # 날짜 파티션을 파이프라인 시작 시점에 한 번만 설정
-    dt_partition = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     last_run_time: datetime | None = None
     if not full_refresh:
@@ -244,7 +242,7 @@ async def run_entity_pipeline(
         )
         raise
 
-async def main(full_refresh: bool = False) -> None:
+async def main(full_refresh: bool = False, target_date: str | None = None) -> None:
     """
     EL 파이프라인의 실행 진입점입니다.
     """
@@ -272,6 +270,13 @@ async def main(full_refresh: bool = False) -> None:
 
     auth_provider = StaticAuthProvider(token=static_token)
 
+    if target_date:
+        dt_partition = target_date
+        logger.info(f"지정된 날짜 파티션 사용: {dt_partition}")
+    else:
+        dt_partition = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        logger.info(f"현재 날짜 파티션 사용: {dt_partition}")
+
     async with create_clients() as (http_client, s3_client):
         state_manager = S3StateManager(client=s3_client, bucket_name=bucket_name)
         loader = S3Loader(client=s3_client, bucket_name=bucket_name)
@@ -295,6 +300,7 @@ async def main(full_refresh: bool = False) -> None:
                 s3_client=s3_client,
                 bucket_name=bucket_name,
                 entity_name=entity_name,
+                dt_partition=dt_partition,
                 full_refresh=full_refresh
             )
 
@@ -312,5 +318,10 @@ if __name__ == "__main__":
         action="store_true",
         help="전체 로드를 수행합니다. 지정하지 않으면 증분 업데이트가 수행됩니다.",
     )
+    parser.add_argument(
+        "--date",
+        type=str,
+        help="데이터를 적재할 날짜 파티션을 지정합니다 (형식: YYYY-MM-DD). 지정하지 않으면 현재 날짜가 사용됩니다.",
+    )
     args = parser.parse_args()
-    asyncio.run(main(full_refresh=args.full_refresh))
+    asyncio.run(main(full_refresh=args.full_refresh, target_date=args.date))
