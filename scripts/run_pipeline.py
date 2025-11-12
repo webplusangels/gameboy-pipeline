@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import json
 import os
 import sys
 import time
@@ -58,9 +59,15 @@ async def create_clients() -> AsyncGenerator[tuple[httpx.AsyncClient, Any], None
     logger.info("HTTPX AsyncClient 세션 생성...")
     region = os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
     session = aioboto3.Session(region_name=region)
+    timeout = httpx.Timeout(
+        connect=10.0, 
+        read=60.0,
+        write=10.0,
+        pool=10.0
+    )
 
     async with (
-        httpx.AsyncClient() as http_client,
+        httpx.AsyncClient(timeout=timeout) as http_client,
         session.client("s3", region_name=region) as s3_client,
     ):
         try:
@@ -68,11 +75,61 @@ async def create_clients() -> AsyncGenerator[tuple[httpx.AsyncClient, Any], None
         finally:
             logger.info("클라이언트 세션 종료...")
 
+async def _extract_and_load_batches(
+    extractor: Extractor,
+    loader: Loader,
+    entity_name: str,
+    dt_partition: str,
+    last_run_time: datetime | None,
+) -> tuple[list[str], int]:
+    """
+    주어진 Extractor를 사용하여 데이터를 추출하고, 배치 단위로 적재합니다.
+
+    Args:
+        extractor (Extractor): 데이터 추출기 인스턴스
+        loader (Loader): 데이터 적재기 인스턴스
+        entity_name (str): 처리할 엔티티 이름
+        dt_partition (str): 날짜 파티션 문자열 (예: "2024-06-15")
+        last_run_time (datetime | None): 마지막 실행 시간 (증분 업데이트용)
+    Returns:
+        tuple[list[str], int]: 업로드된 파일 키 목록과 총 항목 수
+    """
+    batch = []
+    total_count = 0
+    batch_count = 0
+    uploaded_files = []  # 업로드된 파일 목록 추적
+
+    async for item in extractor.extract(last_updated_at=last_run_time):
+        batch.append(item)
+        total_count += 1
+
+        if len(batch) >= BATCH_SIZE:
+            key = f"raw/{entity_name}/dt={dt_partition}/batch-{batch_count}-{uuid.uuid4()}.jsonl"
+            await loader.load(batch, key)
+            uploaded_files.append(key)  # 파일 목록에 추가
+            logger.info(
+                f"S3에 {entity_name} 배치 {batch_count} 적재 완료: {len(batch)}개 항목"
+            )
+            batch.clear()
+            batch_count += 1
+
+    if batch:
+        key = f"raw/{entity_name}/dt={dt_partition}/batch-{batch_count}-{uuid.uuid4()}.jsonl"
+        await loader.load(batch, key)
+        uploaded_files.append(key)  # 파일 목록에 추가
+        logger.info(
+            f"S3에 {entity_name} 마지막 배치 {batch_count} 적재 완료: {len(batch)}개 항목"
+        )
+
+    return uploaded_files, total_count
+
 
 async def run_entity_pipeline(
     extractor: Extractor,
     loader: Loader,
     state_manager: StateManager,
+    s3_client: Any,
+    bucket_name: str,
     entity_name: str,
     full_refresh: bool = False,
 ) -> None:
@@ -82,6 +139,9 @@ async def run_entity_pipeline(
     Args:
         extractor (Extractor): 데이터 추출기 인스턴스
         loader (Loader): 데이터 적재기 인스턴스
+        state_manager (StateManager): 상태 관리 인스턴스
+        s3_client (Any): S3 클라이언트 인스턴스
+        bucket_name (str): S3 버킷 이름
         entity_name (str): 처리할 엔티티 이름 (예: "games", "platforms")
         full_refresh (bool): 전체 로드 여부
     """
@@ -90,6 +150,9 @@ async def run_entity_pipeline(
     
     # 추출 시작 시간 기록 (State 저장 기준점)
     extraction_start = datetime.now(timezone.utc)
+    
+    # 날짜 파티션을 파이프라인 시작 시점에 한 번만 설정
+    dt_partition = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     last_run_time: datetime | None = None
     if not full_refresh:
@@ -101,35 +164,65 @@ async def run_entity_pipeline(
         else:
             logger.info(f"'{entity_name}' 전체 로드 실행")
 
-    batch = []
-    total_count = 0
-    batch_count = 0
-    
-    # 날짜 파티션을 파이프라인 시작 시점에 한 번만 설정
-    dt_partition = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
     try:
-        async for item in extractor.extract(last_updated_at=last_run_time):
-            batch.append(item)
-            total_count += 1
+        new_files, new_count = await _extract_and_load_batches(
+            extractor=extractor,
+            loader=loader,
+            entity_name=entity_name,
+            dt_partition=dt_partition,
+            last_run_time=last_run_time,
+        )
 
-            if len(batch) >= BATCH_SIZE:
-                key = f"raw/{entity_name}/dt={dt_partition}/batch-{batch_count}-{uuid.uuid4()}.jsonl"
-                await loader.load(batch, key)
-                logger.info(
-                    f"S3에 {entity_name} 배치 {batch_count} 적재 완료: {len(batch)}개 항목"
-                )
-                batch.clear()
-                batch_count += 1
+        if new_count == 0:
+            logger.info(f"{entity_name} 엔티티에 새로운 데이터가 없습니다. 파이프라인 종료.")
+            await state_manager.save_last_run_time(entity_name, extraction_start)
+            return
 
-        if batch:
-            key = f"raw/{entity_name}/dt={dt_partition}/batch-{batch_count}-{uuid.uuid4()}.jsonl"
-            await loader.load(batch, key)
-            logger.info(
-                f"S3에 {entity_name} 마지막 배치 {batch_count} 적재 완료: {len(batch)}개 항목"
+        manifest_key = f"raw/{entity_name}/dt={dt_partition}/_manifest.json"
+
+        # 기존 매니페스트 읽기 시도
+        try:
+            resp = await s3_client.get_object(Bucket=bucket_name, Key=manifest_key)
+            content = await resp["Body"].read()
+            manifest_data = json.loads(content.decode("utf-8"))
+            logger.info(f"기존 매니페스트 파일 로드 완료: {manifest_key}")
+        except s3_client.exceptions.NoSuchKey:
+            logger.info(f"기존 매니페스트 파일이 없으므로 생성합니다: {manifest_key}")
+            manifest_data = {
+                "files": [],
+                "total_count": 0,
+                "created_at": extraction_start.isoformat(),
+            }
+        
+        manifest_data["files"].extend(new_files)
+        manifest_data["total_count"] += new_count
+        manifest_data["updated_at"] = extraction_start.isoformat()
+        manifest_data["batch_count"] = len(manifest_data["files"])
+
+        await s3_client.put_object(
+            Bucket=bucket_name,
+            Key=manifest_key,
+            Body=json.dumps(manifest_data, indent=2).encode("utf-8"),
+            ContentType="application/json",
+        )
+        logger.info(f"매니페스트 파일 업데이트 완료: {manifest_key} (총 {len(manifest_data['files'])}개 파일)")
+
+        logger.info("업로드된 파일 태그를 'status=final'로 업데이트 중...")
+        for file_key in new_files:
+            await s3_client.put_object_tagging(
+                Bucket=bucket_name,
+                Key=file_key,
+                Tagging={
+                    'TagSet': [
+                        {
+                            'Key': 'status',
+                            'Value': 'final'
+                        },
+                    ]
+                }
             )
+        logger.info("파일 태그 업데이트 완료.")
 
-        # 성공 시에만 State 저장 (추출 시작 시간 기준)
         await state_manager.save_last_run_time(entity_name, extraction_start)
 
         end_time = time.perf_counter()
@@ -137,12 +230,12 @@ async def run_entity_pipeline(
 
         logger.success(
             f"{entity_name} 엔티티 EL 파이프라인 완료 - "
-            f"총 {total_count}개 항목 처리 "
+            f"총 {new_count}개 항목 처리 "
             f"({'증분' if last_run_time else '전체'} 모드), "
             f"소요 시간: {elapsed_time:.2f}초 "
-            f"({'평균 ' + str(int(total_count / elapsed_time)) + '개/초)' if elapsed_time > 0 and total_count > 0 else ''}"
+            f"({'평균 ' + str(int(new_count / elapsed_time)) + '개/초)' if elapsed_time > 0 and new_count > 0 else ''}"
         )
-
+    
     except Exception as e:
         logger.error(f"{entity_name} 엔티티 EL 파이프라인 실패: {e}")
         logger.warning(
@@ -150,7 +243,6 @@ async def run_entity_pipeline(
             f"다음 실행 시 {'전체 로드' if not last_run_time else f'{last_run_time.isoformat()} 이후부터 재시도'}"
         )
         raise
-
 
 async def main(full_refresh: bool = False) -> None:
     """
@@ -200,6 +292,8 @@ async def main(full_refresh: bool = False) -> None:
                 extractor=extractor,
                 loader=loader,
                 state_manager=state_manager,
+                s3_client=s3_client,
+                bucket_name=bucket_name,
                 entity_name=entity_name,
                 full_refresh=full_refresh
             )
