@@ -2,19 +2,37 @@
 {{
     config(
         materialized = 'view' if target.name == 'dev_local_tdd' else 'incremental',
-
         unique_key = 'game_id',
-
-        on_schema_change = 'append_new_columns'
+        on_schema_change = 'append_new_columns',
+        incremental_strategy = 'merge'
     )
 }}
 
 -- 1. TDD로 검증된 Staging(재료) 테이블들을 불러옵니다.
-with games as (
+with
+{% if is_incremental() %}
+{% set _check_sql %}
+    select column_name
+    from information_schema.columns
+    where table_schema = '{{ this.schema }}'
+        and table_name = '{{ this.identifier }}'
+        and column_name = 'updated_at'
+{% endset %}
+{% set _check_result = run_query(_check_sql) %}
+{% set has_updated_at = (_check_result is not none) and (_check_result.columns | length > 0) and (_check_result.columns[0].values() | length > 0) %}
+{% endif %}
+
+{% if is_incremental() and has_updated_at %}
+max_timestamp as (
+    select max(updated_at) as max_updated_at from {{ this }}
+),
+{% endif %}
+
+games as (
     select * from {{ ref('stg_games') }}
-    {% if is_incremental() %}
-    -- 증분 모드: 마지막 실행 이후 업데이트된 게임만 처리
-    where updated_at > (select max(updated_at) from {{ this }})
+
+    {% if is_incremental() and has_updated_at %}
+    where updated_at > (select max_updated_at from max_timestamp)
     {% endif %}
 ),
 
@@ -39,23 +57,43 @@ player_perspectives as (
 ),
 
 game_platforms_bridge as (
-    select * from {{ ref('stg_game_platform_bridge') }}
+    select b.*
+    from {{ ref('stg_game_platform_bridge') }} as b
+    {% if is_incremental() and has_updated_at %}
+    inner join games as g on b.game_id = g.id
+    {% endif %}
 ),
 
 game_genres_bridge as (
-    select * from {{ ref('stg_game_genre_bridge') }}
+    select b.*
+    from {{ ref('stg_game_genre_bridge') }} as b
+    {% if is_incremental() and has_updated_at %}
+    inner join games as g on b.game_id = g.id
+    {% endif %}
 ),
 
 game_modes_bridge as (
-    select * from {{ ref('stg_game_mode_bridge') }}
+    select b.*
+    from {{ ref('stg_game_mode_bridge') }} as b
+    {% if is_incremental() and has_updated_at %}
+    inner join games as g on b.game_id = g.id
+    {% endif %}
 ),
 
 game_themes_bridge as (
-    select * from {{ ref('stg_game_theme_bridge') }}
+    select b.*
+    from {{ ref('stg_game_theme_bridge') }} as b
+    {% if is_incremental() and has_updated_at %}
+    inner join games as g on b.game_id = g.id
+    {% endif %}
 ),
 
 game_perspectives_bridge as (
-    select * from {{ ref('stg_game_perspective_bridge') }}
+    select b.*
+    from {{ ref('stg_game_perspective_bridge') }} as b
+    {% if is_incremental() and has_updated_at %}
+    inner join games as g on b.game_id = g.id
+    {% endif %}
 ),
 
 -- 2. 플랫폼 이름(name)을 JOIN하고, 게임 ID별로 다시 배열(LIST)로 묶습니다.
@@ -108,7 +146,7 @@ player_perspectives_agg as (
     left join player_perspectives as p
         on b.perspective_id = p.id
     group by b.game_id
-)
+),
 
 -- 4. 최종: games 테이블에 모든 '배열' 컬럼들을 JOIN합니다.
 final as (

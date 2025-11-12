@@ -6,7 +6,7 @@ WITH raw_games AS (
 )
 {% else %}
 WITH raw_games AS (
-  SELECT * FROM read_json_auto('s3://{{ env_var("S3_BUCKET_NAME", "placeholder-bucket") }}/raw/games/*.jsonl')
+  SELECT * FROM read_json_auto({{ get_partition_path("games") }})
 )
 {% endif %}
 
