@@ -21,15 +21,11 @@ async def test_s3_state_manager_get_last_run_time_exists(mocker, mock_client):
         "last_run_time": "2025-11-10T10:00:00+00:00",
         "updated_at": "2025-11-10T10:05:00+00:00",
     }
-    mock_response = {
-        "Body": AsyncMock()
-    }
+    mock_response = {"Body": AsyncMock()}
     mock_response["Body"].read = AsyncMock(return_value=json.dumps(state_data).encode())
     mock_s3_client.get_object = AsyncMock(return_value=mock_response)
     state_manager = S3StateManager(
-        client=mock_s3_client,
-        bucket_name="test-bucket",
-        state_prefix="pipeline/state/"
+        client=mock_s3_client, bucket_name="test-bucket", state_prefix="pipeline/state/"
     )
 
     result = await state_manager.get_last_run_time("games")
@@ -43,8 +39,7 @@ async def test_s3_state_manager_get_last_run_time_exists(mocker, mock_client):
 
     # S3 get_object 호출 확인 (엔티티별 파일)
     mock_s3_client.get_object.assert_called_once_with(
-        Bucket="test-bucket",
-        Key="pipeline/state/games.json"
+        Bucket="test-bucket", Key="pipeline/state/games.json"
     )
 
 
@@ -58,15 +53,10 @@ async def test_s3_state_manager_get_last_run_time_not_exists(mocker, mock_client
 
     mock_s3_client = mock_client
     mock_s3_client.get_object = AsyncMock(
-        side_effect=ClientError(
-            {"Error": {"Code": "NoSuchKey"}},
-            "GetObject"
-        )
+        side_effect=ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
     )
     state_manager = S3StateManager(
-        client=mock_s3_client,
-        bucket_name="test-bucket",
-        state_prefix="pipeline/state/"
+        client=mock_s3_client, bucket_name="test-bucket", state_prefix="pipeline/state/"
     )
 
     result = await state_manager.get_last_run_time("games")
@@ -75,7 +65,9 @@ async def test_s3_state_manager_get_last_run_time_not_exists(mocker, mock_client
 
 
 @pytest.mark.asyncio
-async def test_s3_state_manager_get_last_run_time_entity_not_in_state(mocker, mock_client):
+async def test_s3_state_manager_get_last_run_time_entity_not_in_state(
+    mocker, mock_client
+):
     """
     [GREEN]
     상태 파일은 있지만 'last_run_time' 키가 없을 때 None 반환 테스트
@@ -86,15 +78,11 @@ async def test_s3_state_manager_get_last_run_time_entity_not_in_state(mocker, mo
     state_data = {
         "updated_at": "2025-11-09T15:30:00+00:00",  # last_run_time 없음
     }
-    mock_response = {
-        "Body": AsyncMock()
-    }
+    mock_response = {"Body": AsyncMock()}
     mock_response["Body"].read = AsyncMock(return_value=json.dumps(state_data).encode())
     mock_s3_client.get_object = AsyncMock(return_value=mock_response)
     state_manager = S3StateManager(
-        client=mock_s3_client,
-        bucket_name="test-bucket",
-        state_prefix="pipeline/state/"
+        client=mock_s3_client, bucket_name="test-bucket", state_prefix="pipeline/state/"
     )
 
     result = await state_manager.get_last_run_time("games")
@@ -111,17 +99,12 @@ async def test_s3_state_manager_save_last_run_time_new_state(mocker, mock_client
 
     mock_s3_client = mock_client
     mock_s3_client.get_object = AsyncMock(
-        side_effect=ClientError(
-            {"Error": {"Code": "NoSuchKey"}},
-            "GetObject"
-        )
+        side_effect=ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
     )
 
     mock_s3_client.put_object = AsyncMock()
     state_manager = S3StateManager(
-        client=mock_s3_client,
-        bucket_name="test-bucket",
-        state_prefix="pipeline/state/"
+        client=mock_s3_client, bucket_name="test-bucket", state_prefix="pipeline/state/"
     )
 
     run_time = datetime(2025, 11, 11, 12, 30, 0, tzinfo=UTC)
@@ -156,17 +139,15 @@ async def test_s3_state_manager_save_last_run_time_update_existing(mocker, mock_
         "updated_at": "2025-11-09T15:35:00+00:00",
         "records_processed": 220,  # 추가 메타데이터
     }
-    mock_response = {
-        "Body": AsyncMock()
-    }
-    mock_response["Body"].read = AsyncMock(return_value=json.dumps(existing_state).encode())
+    mock_response = {"Body": AsyncMock()}
+    mock_response["Body"].read = AsyncMock(
+        return_value=json.dumps(existing_state).encode()
+    )
     mock_s3_client.get_object = AsyncMock(return_value=mock_response)
     mock_s3_client.put_object = AsyncMock()
 
     state_manager = S3StateManager(
-        client=mock_s3_client,
-        bucket_name="test-bucket",
-        state_prefix="pipeline/state/"
+        client=mock_s3_client, bucket_name="test-bucket", state_prefix="pipeline/state/"
     )
 
     run_time = datetime(2025, 11, 11, 14, 0, 0, tzinfo=UTC)
@@ -182,6 +163,7 @@ async def test_s3_state_manager_save_last_run_time_update_existing(mocker, mock_
     assert "records_processed" in saved_state  # 기존 메타데이터 유지
     assert saved_state["records_processed"] == 220
 
+
 @pytest.mark.asyncio
 async def test_s3_state_manager_save_last_run_time_naive_datetime(mocker, mock_client):
     """
@@ -194,17 +176,15 @@ async def test_s3_state_manager_save_last_run_time_naive_datetime(mocker, mock_c
         "last_run_time": "2025-11-09T15:30:00+00:00",
         "updated_at": "2025-11-09T15:35:00+00:00",
     }
-    mock_response = {
-        "Body": AsyncMock()
-    }
-    mock_response["Body"].read = AsyncMock(return_value=json.dumps(existing_state).encode())
+    mock_response = {"Body": AsyncMock()}
+    mock_response["Body"].read = AsyncMock(
+        return_value=json.dumps(existing_state).encode()
+    )
     mock_s3_client.get_object = AsyncMock(return_value=mock_response)
     mock_s3_client.put_object = AsyncMock()
 
     state_manager = S3StateManager(
-        client=mock_s3_client,
-        bucket_name="test-bucket",
-        state_prefix="pipeline/state/"
+        client=mock_s3_client, bucket_name="test-bucket", state_prefix="pipeline/state/"
     )
 
     # timezone-naive datetime
@@ -218,6 +198,7 @@ async def test_s3_state_manager_save_last_run_time_naive_datetime(mocker, mock_c
     assert "last_run_time" in saved_state
     assert saved_state["last_run_time"] == "2025-11-11T14:00:00+00:00"  # UTC로 변환됨
 
+
 @pytest.mark.asyncio
 async def test_s3_state_manager_reset_state(mocker, mock_client):
     """
@@ -229,16 +210,13 @@ async def test_s3_state_manager_reset_state(mocker, mock_client):
     mock_s3_client.delete_object = AsyncMock()
 
     state_manager = S3StateManager(
-        client=mock_s3_client,
-        bucket_name="test-bucket",
-        state_prefix="pipeline/state/"
+        client=mock_s3_client, bucket_name="test-bucket", state_prefix="pipeline/state/"
     )
 
     await state_manager.reset_state("games")
 
     mock_s3_client.delete_object.assert_called_once_with(
-        Bucket="test-bucket",
-        Key="pipeline/state/games.json"
+        Bucket="test-bucket", Key="pipeline/state/games.json"
     )
 
 
@@ -277,9 +255,7 @@ async def test_s3_state_manager_list_states(mocker, mock_client):
                 "last_run_time": "2025-11-09T15:30:00+00:00",
             }
 
-        mock_response = {
-            "Body": AsyncMock()
-        }
+        mock_response = {"Body": AsyncMock()}
         mock_response["Body"].read = AsyncMock(
             return_value=json.dumps(body_data).encode()
         )
@@ -288,9 +264,7 @@ async def test_s3_state_manager_list_states(mocker, mock_client):
     mock_s3_client.get_object = mock_get_object
 
     state_manager = S3StateManager(
-        client=mock_s3_client,
-        bucket_name="test-bucket",
-        state_prefix="pipeline/state/"
+        client=mock_s3_client, bucket_name="test-bucket", state_prefix="pipeline/state/"
     )
 
     # Act

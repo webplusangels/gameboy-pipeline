@@ -61,6 +61,7 @@ class Loader(ABC):
         raise NotImplementedError
         return None
 
+
 class StateManager(ABC):
     """
     StateManager 인터페이스.

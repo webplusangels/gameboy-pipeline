@@ -71,7 +71,9 @@ class BaseIgdbExtractor(Extractor, ABC):
         self._auth_provider = auth_provider
         self._client_id = client_id
 
-    async def extract(self, last_updated_at: datetime | None = None) -> AsyncGenerator[dict[str, Any], None]:
+    async def extract(
+        self, last_updated_at: datetime | None = None
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         IGDB API에서 데이터를 추출합니다.
 
@@ -108,9 +110,7 @@ class BaseIgdbExtractor(Extractor, ABC):
             )
 
             # IGDB Apicalypse 쿼리 문법: where 절 뒤에 sort 추가
-            query_str = (
-                f"{self.incremental_query} where updated_at > {query_timestamp}; sort id asc;"
-            )
+            query_str = f"{self.incremental_query} where updated_at > {query_timestamp}; sort id asc;"
         else:
             logger.info(f"IGDB {entity_name} 전체 추출 실행.")
             query_str = self.base_query
@@ -175,13 +175,13 @@ class IgdbGenreExtractor(BaseIgdbExtractor):
     def api_url(self) -> str:
         return "https://api.igdb.com/v4/genres"
 
+
 class IgdbGameModeExtractor(BaseIgdbExtractor):
     """IGDB API로부터 게임 모드 데이터를 추출하는 Extractor 구현체."""
 
     @property
     def api_url(self) -> str:
         return "https://api.igdb.com/v4/game_modes"
-
 
 
 class IgdbPlayerPerspectiveExtractor(BaseIgdbExtractor):
@@ -192,12 +192,9 @@ class IgdbPlayerPerspectiveExtractor(BaseIgdbExtractor):
         return "https://api.igdb.com/v4/player_perspectives"
 
 
-
 class IgdbThemeExtractor(BaseIgdbExtractor):
     """IGDB API로부터 테마 데이터를 추출하는 Extractor 구현체."""
 
     @property
     def api_url(self) -> str:
         return "https://api.igdb.com/v4/themes"
-
-

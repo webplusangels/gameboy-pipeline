@@ -133,9 +133,7 @@ class S3StateManager(StateManager):
                 ContentType="application/json",
             )
 
-            logger.success(
-                f"엔티티 '{entity}' 상태 저장 완료: {run_time.isoformat()}"
-            )
+            logger.success(f"엔티티 '{entity}' 상태 저장 완료: {run_time.isoformat()}")
 
         except Exception as e:
             logger.error(f"엔티티 '{entity}' 상태 저장 실패: {e}")
