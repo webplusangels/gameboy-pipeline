@@ -1,0 +1,21 @@
+transform:
+  # 기본 타겟을 'prod_s3'로 설정 (CI/CD용)
+  target: prod_s3
+  outputs:
+    # --- 1. TDD(단위 테스트)용 타겟 ---
+    dev_local_tdd:
+      type: duckdb
+      path: tdd_warehouse.db # TDD용 임시 DB 파일
+
+    # --- 2. 통합 테스트(IT) 및 실제 실행용 타겟 ---
+    prod_s3:
+      type: duckdb
+      path: prod_warehouse.db # 실제 DB 파일
+
+      # S3 접속을 위한 확장 및 비밀번호 설정
+      extensions:
+        - httpfs
+      settings:
+        s3_region: "{{ env_var('AWS_DEFAULT_REGION', 'us-east-1') }}"
+        s3_access_key_id: "{{ env_var('AWS_ACCESS_KEY_ID', 'placeholder') }}"
+        s3_secret_access_key: "{{ env_var('AWS_SECRET_ACCESS_KEY', 'placeholder') }}"
