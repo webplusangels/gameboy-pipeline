@@ -64,7 +64,7 @@ class Loader(ABC):
 class StateManager(ABC):
     """
     StateManager 인터페이스.
-    
+
     증분 업데이트를 위해 엔티티별 마지막 실행 시간을 관리합니다.
     """
 
@@ -78,13 +78,13 @@ class StateManager(ABC):
 
         Returns:
             마지막 실행 시간(UTC) 또는 첫 실행이면 None.
-            
+
         Note:
             None 반환 시 전체 로드(full load)를 의미합니다.
         """
         raise NotImplementedError
         return None
-    
+
     @abstractmethod
     async def save_last_run_time(self, entity: str, run_time: datetime) -> None:
         """

@@ -30,7 +30,6 @@ class BaseIgdbExtractor(Extractor, ABC):
     def incremental_query(self) -> str:
         """
         증분 추출을 위한 쿼리 문자열.
-        
         Note:
             - updated_at으로 정렬하여 시간순 처리
             - where 절은 extract() 메서드에서 동적 추가
@@ -46,10 +45,10 @@ class BaseIgdbExtractor(Extractor, ABC):
     def safety_margin_minutes(self) -> int:
         """
         증분 쿼리 시 적용할 안전 마진(분 단위).
-        
+
         클럭 스큐 문제로 인한 데이터 누락을 방지하기 위해
         last_updated_at에서 이 값만큼 빼고 쿼리합니다.
-        
+
         예: last_updated_at = 10:00, safety_margin = 5
         → 쿼리: "where updated_at > 09:55"
         → 중복 허용, 누락 방지 (dbt에서 incremental 처리)
@@ -100,7 +99,7 @@ class BaseIgdbExtractor(Extractor, ABC):
                 minutes=self.safety_margin_minutes
             )
             query_timestamp = int(safe_timestamp.timestamp())
-            
+
             logger.info(
                 f"IGDB {entity_name} 증분 추출: "
                 f"last_updated_at={last_updated_at.isoformat()} "
@@ -119,7 +118,7 @@ class BaseIgdbExtractor(Extractor, ABC):
         # === 페이징을 통한 데이터 추출 ===
         offset = 0
         total_extracted = 0
-        
+
         while True:
             paginated_query = f"{query_str} limit {self.limit}; offset {offset};"
             logger.debug(f"{entity_name} - API 요청: {paginated_query}")

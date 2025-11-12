@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from botocore.exceptions import ClientError
@@ -11,14 +11,14 @@ from src.pipeline.interfaces import StateManager
 class S3StateManager(StateManager):
     """
     S3 기반 StateManager 구현체.
-    
+
     파이프라인의 실행 상태를 엔티티별 개별 S3 JSON 파일로 관리합니다.
     증분 업데이트를 지원하며, 엔티티별 병렬 실행 시 경합 조건을 방지합니다.
-    
+
     State 파일 구조:
     - S3 Key: {state_prefix}{entity}.json
     - 예: pipeline/state/games.json, pipeline/state/platforms.json
-    
+
     파일 형식 예시 (pipeline/state/games.json):
     {
         "last_run_time": "2025-11-11T10:00:00+00:00",
@@ -53,7 +53,7 @@ class S3StateManager(StateManager):
             마지막 실행 시간(UTC) 또는 첫 실행이면 None.
         """
         state_key = f"{self._state_prefix}{entity}.json"
-        
+
         try:
             response = await self._client.get_object(
                 Bucket=self._bucket_name, Key=state_key
@@ -101,7 +101,7 @@ class S3StateManager(StateManager):
             Exception: S3 저장 실패 시 예외 발생
         """
         state_key = f"{self._state_prefix}{entity}.json"
-        
+
         try:
             state = {}
             try:
@@ -121,10 +121,10 @@ class S3StateManager(StateManager):
                 logger.warning(
                     f"run_time이 timezone-naive입니다. UTC로 간주합니다: {run_time}"
                 )
-                run_time = run_time.replace(tzinfo=timezone.utc)
+                run_time = run_time.replace(tzinfo=UTC)
 
             state["last_run_time"] = run_time.isoformat()
-            state["updated_at"] = datetime.now(timezone.utc).isoformat()
+            state["updated_at"] = datetime.now(UTC).isoformat()
 
             await self._client.put_object(
                 Bucket=self._bucket_name,
@@ -152,7 +152,7 @@ class S3StateManager(StateManager):
             Exception: S3 삭제 실패 시 예외 발생
         """
         state_key = f"{self._state_prefix}{entity}.json"
-        
+
         try:
             await self._client.delete_object(
                 Bucket=self._bucket_name,
@@ -163,7 +163,7 @@ class S3StateManager(StateManager):
         except Exception as e:
             logger.error(f"엔티티 '{entity}' 상태 파일 삭제 실패: {e}")
             raise
-    
+
     async def list_states(self) -> dict[str, datetime | None]:
         """
         S3에서 모든 엔티티의 상태 파일을 나열하고 각 엔티티의 마지막 실행 시간을 반환합니다.

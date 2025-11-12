@@ -1,10 +1,11 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
+
+import pytest
 from botocore.exceptions import ClientError
 
 from src.pipeline.state import S3StateManager
-import pytest
 
 
 @pytest.mark.asyncio
@@ -30,16 +31,16 @@ async def test_s3_state_manager_get_last_run_time_exists(mocker, mock_client):
         bucket_name="test-bucket",
         state_prefix="pipeline/state/"
     )
-    
+
     result = await state_manager.get_last_run_time("games")
-    
+
     assert result is not None
     assert result.year == 2025
     assert result.month == 11
     assert result.day == 10
     assert result.hour == 10
-    assert result.tzinfo == timezone.utc  # UTC 확인
-    
+    assert result.tzinfo == UTC  # UTC 확인
+
     # S3 get_object 호출 확인 (엔티티별 파일)
     mock_s3_client.get_object.assert_called_once_with(
         Bucket="test-bucket",
@@ -69,7 +70,7 @@ async def test_s3_state_manager_get_last_run_time_not_exists(mocker, mock_client
     )
 
     result = await state_manager.get_last_run_time("games")
-    
+
     assert result is None  # 전체 로드 시그널
 
 
@@ -95,9 +96,9 @@ async def test_s3_state_manager_get_last_run_time_entity_not_in_state(mocker, mo
         bucket_name="test-bucket",
         state_prefix="pipeline/state/"
     )
-    
+
     result = await state_manager.get_last_run_time("games")
-    
+
     assert result is None  # last_run_time 키 없으면 전체 로드
 
 
@@ -115,24 +116,24 @@ async def test_s3_state_manager_save_last_run_time_new_state(mocker, mock_client
             "GetObject"
         )
     )
-    
+
     mock_s3_client.put_object = AsyncMock()
     state_manager = S3StateManager(
         client=mock_s3_client,
         bucket_name="test-bucket",
         state_prefix="pipeline/state/"
     )
-    
-    run_time = datetime(2025, 11, 11, 12, 30, 0, tzinfo=timezone.utc)
+
+    run_time = datetime(2025, 11, 11, 12, 30, 0, tzinfo=UTC)
     await state_manager.save_last_run_time("games", run_time)
-    
+
     mock_s3_client.put_object.assert_called_once()
     call_args = mock_s3_client.put_object.call_args
-    
+
     assert call_args.kwargs["Bucket"] == "test-bucket"
     assert call_args.kwargs["Key"] == "pipeline/state/games.json"
     assert call_args.kwargs["ContentType"] == "application/json"
-    
+
     # 수정: 표준 키 검증
     saved_state = json.loads(call_args.kwargs["Body"])
     assert "last_run_time" in saved_state
@@ -161,19 +162,19 @@ async def test_s3_state_manager_save_last_run_time_update_existing(mocker, mock_
     mock_response["Body"].read = AsyncMock(return_value=json.dumps(existing_state).encode())
     mock_s3_client.get_object = AsyncMock(return_value=mock_response)
     mock_s3_client.put_object = AsyncMock()
-    
+
     state_manager = S3StateManager(
         client=mock_s3_client,
         bucket_name="test-bucket",
         state_prefix="pipeline/state/"
     )
-    
-    run_time = datetime(2025, 11, 11, 14, 0, 0, tzinfo=timezone.utc)
+
+    run_time = datetime(2025, 11, 11, 14, 0, 0, tzinfo=UTC)
     await state_manager.save_last_run_time("games", run_time)
-    
+
     call_args = mock_s3_client.put_object.call_args
     saved_state = json.loads(call_args.kwargs["Body"])
-    
+
     # 수정: 표준 키로 업데이트 확인
     assert "last_run_time" in saved_state
     assert saved_state["last_run_time"] == "2025-11-11T14:00:00+00:00"
@@ -199,20 +200,20 @@ async def test_s3_state_manager_save_last_run_time_naive_datetime(mocker, mock_c
     mock_response["Body"].read = AsyncMock(return_value=json.dumps(existing_state).encode())
     mock_s3_client.get_object = AsyncMock(return_value=mock_response)
     mock_s3_client.put_object = AsyncMock()
-    
+
     state_manager = S3StateManager(
         client=mock_s3_client,
         bucket_name="test-bucket",
         state_prefix="pipeline/state/"
     )
-    
+
     # timezone-naive datetime
     run_time = datetime(2025, 11, 11, 14, 0, 0)
     await state_manager.save_last_run_time("games", run_time)
-    
+
     call_args = mock_s3_client.put_object.call_args
     saved_state = json.loads(call_args.kwargs["Body"])
-    
+
     # 수정: 표준 키 검증
     assert "last_run_time" in saved_state
     assert saved_state["last_run_time"] == "2025-11-11T14:00:00+00:00"  # UTC로 변환됨
@@ -226,15 +227,15 @@ async def test_s3_state_manager_reset_state(mocker, mock_client):
 
     mock_s3_client = mock_client
     mock_s3_client.delete_object = AsyncMock()
-    
+
     state_manager = S3StateManager(
         client=mock_s3_client,
         bucket_name="test-bucket",
         state_prefix="pipeline/state/"
     )
-    
+
     await state_manager.reset_state("games")
-    
+
     mock_s3_client.delete_object.assert_called_once_with(
         Bucket="test-bucket",
         Key="pipeline/state/games.json"
@@ -249,11 +250,11 @@ async def test_s3_state_manager_list_states(mocker, mock_client):
     """
 
     mock_s3_client = mock_client
-    
+
     # list_objects_v2 paginator 모킹
     mock_paginator = AsyncMock()
     mock_s3_client.get_paginator = lambda op: mock_paginator
-    
+
     # S3에 2개의 상태 파일 존재
     async def mock_paginate(**kwargs):
         yield {
@@ -262,12 +263,12 @@ async def test_s3_state_manager_list_states(mocker, mock_client):
                 {"Key": "pipeline/state/platforms.json"},
             ]
         }
-    
+
     mock_paginator.paginate = mock_paginate
-    
+
     # 각 엔티티별 상태 파일 응답 모킹
-    async def mock_get_object(Bucket, Key):
-        if "games" in Key:
+    async def mock_get_object(bucket, key):
+        if "games" in key:
             body_data = {
                 "last_run_time": "2025-11-10T10:00:00+00:00",
             }
@@ -275,7 +276,7 @@ async def test_s3_state_manager_list_states(mocker, mock_client):
             body_data = {
                 "last_run_time": "2025-11-09T15:30:00+00:00",
             }
-        
+
         mock_response = {
             "Body": AsyncMock()
         }
@@ -283,18 +284,18 @@ async def test_s3_state_manager_list_states(mocker, mock_client):
             return_value=json.dumps(body_data).encode()
         )
         return mock_response
-    
+
     mock_s3_client.get_object = mock_get_object
-    
+
     state_manager = S3StateManager(
         client=mock_s3_client,
         bucket_name="test-bucket",
         state_prefix="pipeline/state/"
     )
-    
+
     # Act
     result = await state_manager.list_states()
-    
+
     # Assert
     assert len(result) == 2
     assert "games" in result
