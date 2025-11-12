@@ -19,7 +19,7 @@ jobs:
           python-version: "3.11"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v1
+        uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
 
@@ -59,7 +59,7 @@ jobs:
 
       # 의존성 설치 - uv
       - name: Set up uv
-        uses: astral-sh/setup-uv@v1
+        uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
 

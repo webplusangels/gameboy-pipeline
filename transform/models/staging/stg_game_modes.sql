@@ -19,5 +19,5 @@ SELECT
     created_at,
     updated_at,
     checksum
-FROM read_json_auto('s3://{{ env_var("S3_BUCKET_NAME") }}/raw/game_modes/*.jsonl')
+FROM read_json_auto({{ get_partition_path("game_modes") }})
 {% endif %}

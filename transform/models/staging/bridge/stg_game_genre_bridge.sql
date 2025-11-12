@@ -1,4 +1,5 @@
 -- 게임-장르 다대다 관계 브릿지 테이블
+
 -- 배열 필드를 행으로 펼쳐서 관계형 데이터로 변환
 {% if target.name == 'dev_local_tdd' %}
 WITH raw_games AS (
@@ -6,7 +7,7 @@ WITH raw_games AS (
 )
 {% else %}
 WITH raw_games AS (
-  SELECT * FROM read_json_auto('s3://{{ env_var("S3_BUCKET_NAME", "placeholder-bucket") }}/raw/games/*.jsonl')
+  SELECT * FROM read_json_auto({{ get_partition_path("games") }})
 )
 {% endif %}
 

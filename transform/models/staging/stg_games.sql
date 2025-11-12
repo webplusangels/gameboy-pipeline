@@ -1,14 +1,27 @@
+{{
+  config(
+    materialized = 'table' if target.name == 'prod_s3' else 'view'
+  )
+}}
+
 -- TDD 환경: 로컬 JSONL 파일에서 읽기
 -- Prod 환경: S3 JSONL 파일에서 읽기
-{% if target.name == 'dev_local_tdd' %}
 WITH raw_games AS (
+  {% if target.name == 'dev_local_tdd' %}
   SELECT * FROM read_json_auto('seeds/igdb_games_mock.jsonl')
+  {% else %}
+  SELECT * FROM read_json_auto({{ get_partition_path("games") }})
+  {% endif %}
+),
+
+deduplicated_games AS (
+  SELECT *
+  FROM raw_games
+  QUALIFY ROW_NUMBER() OVER (
+      PARTITION BY id 
+      ORDER BY updated_at DESC -- 같은 ID가 있다면 최신 수정일 우선
+  ) = 1
 )
-{% else %}
-WITH raw_games AS (
-  SELECT * FROM read_json_auto('s3://{{ env_var("S3_BUCKET_NAME", "placeholder-bucket") }}/raw/games/*.jsonl')
-)
-{% endif %}
 
 SELECT
   -- 기본 정보
@@ -44,5 +57,5 @@ SELECT
   screenshots,
   websites
 
-FROM raw_games
+FROM deduplicated_games
 WHERE name IS NOT NULL  -- 이름 없는 게임 제외

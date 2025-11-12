@@ -1,0 +1,332 @@
+# 04. 성능 측정 및 개선
+
+이 문서는 프로젝트에서 실제 구현된 파이프라인의 단계들을 벤치마크하고, 성능 베이스라인을 수치화하여 기록하며 이를 바탕으로 개선해나가는 과정을 기술합니다.
+
+## 측정 환경
+
+| 항목     | 사양                       |
+| -------- | -------------------------- |
+| OS       | Windows 10 / WSL2 Ubuntu   |
+| CPU      | i7-8750H (6코어, 12쓰레드) |
+| RAM      | 16GB                       |
+| Python   | 3.11.9 (uv 0.5.0)          |
+| Data Set | IGDB(34만+α)               |
+
+## E-L 파이프라인
+
+> [!NOTE]
+> EL 파이프라인의 처리 시간(특히 E)은 병목으로 판단됨.
+
+### 측정 방법
+
+1. `run_pipeline.py`를 3회 실행합니다.
+2. `logs/`에 저장된 E/L 측정 시간을 확인합니다.
+
+### v1 - 순차 실행
+
+> [!IMPORTANT]
+> TDD로 검증된 E-L 파이프라인의 v1(순차) 성능 베이스라인을 측정했습니다. (로컬(E) - S3(L) 3회 실행 평균 기준)
+
+| 태스크 (엔티티)   | 실행 시간 (초)          |
+| :---------------- | :---------------------- |
+| `games` (342k)    | 830.6                   |
+| `platforms` (220) | 0.7                     |
+| `genres` (23)     | 0.8                     |
+| `(기타 3개)`      | 2.3                     |
+| **(EL 총계)**     | **834.4 (13분 54.4초)** |
+
+---
+
+### v1 병목 지점 분석
+
+v1의 경우 기본적으로 `requests`가 아닌 `httpx` 비동기 라이브러리를 사용하지만, 결과적으로 코드에서는 모든 엔드포인트를 통틀어 하나의 `Extractor`에서 순차적 추출이 진행되기 때문에 병렬성이 존재하지 않습니다. 이 때의 실행 시간은 **총 13분 54초** 정도로 데이터 크기를 고려했을 때 느린 것은 아니지만, 빨라질 여지가 없지 않기 때문에 개선을 진행합니다.
+
+현재 사용하고 있는 비동기 라이브러리 `httpx`에서는 많은 옵션을 제공하는데 예를 들어, 여러 연결을 유지해 한 번에 가져오는 `gather`나, http2를 지원하기 때문에 멀티플렉싱을 이용한 속도 향상 효과도 기대할 수 있습니다. 혹은 `aiohttp`와 같은 타 비동기 라이브러리는 `httpx`보다 속도가 빠르다고 알려져 있기 때문에 아예 라이브러리를 교체하는 방법도 고려해 볼 수 있습니다.
+
+다만 병목 지점이라고 하면 결국 가장 큰 데이터 세트인 `games` 엔티티에 한정되어 있고, 결국 병목의 제거는 `games` 데이터 세트의 빠른 추출에 좌우됩니다. 따라서 4개의 요청 동시 제한과 페이징에서의 상태 관리에 세심한 주의가 필요할 것입니다.
+
+### v2
+
+[Pending...]
+
+## T(`dbt`)
+
+> [!NOTE]
+> 팩트 테이블인 games 테이블은 데이터 파이프라인에서 추출한 데이터 중 가장 큰 **34만 X 50** 정도의 크기를 가지고 있으며, 추출 뿐만 아니라 변환에 많은 시간이 소요되어 병목 지점으로 판단됨.
+
+### 측정 방법
+
+1. `cd transform && uv run --env-file ../.env dbt run --target prod_s3 && uv run --env-file ../.env dbt test --target prod_s3`를 실행합니다.
+2. 로그를 확인하고 소요 시간을 기록합니다.
+
+> 테스트는 주로 기본 값들의 유일 값, Null값 검사를 포함, bridge 테이블이 제대로 JOIN 되었는지 등을 검사합니다.
+
+### v1 - `VIEW`
+
+> [!IMPORTANT]
+> 프로덕션 데이터 모델을 처리할 때 실행(`run`)과 테스트(`test`)에서 `VIEW`로만 일괄 처리했을 때의 시간을 측정했습니다. 주요 처리 단계와 총 시간을 표기합니다.
+
+| 단계       |                                     태스크 |              실행 시간 (초) |
+| ---------- | -----------------------------------------: | --------------------------: |
+| **`run`**  |                 main.stg_game_genre_bridge |                       86.83 |
+|            |                  main.stg_game_mode_bridge |                       65.01 |
+|            |           main.stg_game_perspective_bridge |                       31.19 |
+|            |                             main.dim_games |                      349.65 |
+| **`run`**  |                                총 **11**개 |      **625.21 (10분 25초)** |
+| **`test`** |                 not_null_dim_games_game_id |                     1659.03 |
+|            | not_null_stg_game_mode_bridge_game_mode_id |                      564.91 |
+|            |                   unique_dim_games_game_id |                     1235.60 |
+| **`test`** |                                총 **41**개 | **6446.77 (약 1시간 47분)** |
+
+### v1 병목 지점 분석
+
+이 버전에서 병목 지점은 명확하게 `test`라고 할 수 있습니다. 약 2시간 정도 소모되며, 이 부분에서 가장 주목해야 할 부분은 dim_game 테이블에서의 연산이 끔찍하게 느리다는 점입니다. 그 외에 bridge 테이블 또한 10분 가량 걸린다는 것을 확인할 수 있는데, 이는 모두 한 번의 테스트 당 한 번의 테이블 생성 연산을 실행하기 때문입니다.
+
+그렇기 때문에 이번에는 각 model의 SQL에 프로덕션 모델일 때의 실행 단계에서 뷰가 아닌 테이블로 저장하여 테스트마다 매번 쿼리를 실행하지 않도록 하겠습니다. 실행 단계에서 저장된 테이블은 곧바로 테스트되어 시간을 단축시킬 수 있을 것으로 예상됩니다. 테이블 생성은 팩트 테이블인 game 테이블, bridge 테이블을 대상으로 합니다. 아래의 코드를 `models/staging`의 bridge 연산 sql 파일과 `models/marts`의 `dim_games.sql` 파일의 위에 추가하겠습니다.
+
+### v2 - `VIEW`, `TABLE` 설정
+
+> [!IMPORTANT]
+> 실행(`run`)시에 차원 데이터를 연결한 dim_games를 `VIEW`가 아닌 `TABLE`로 저장하는 등의 최적화를 실행했을 때의 시간을 측정합니다.
+
+<details>
+<summary>설정 변경 사항</summary>
+
+```sql
+-- models/staging/...bridge...sql, models/marts/dim_games.sql에 적용
+{{
+  config(
+    materialized = 'view' if target.name == 'dev_local_tdd' else 'table'
+  ) -- Local 테스트가 아니면 해당 쿼리 산출물을 table로 변경
+}}
+```
+
+</details>
+
+| 단계       |                                     태스크 |          실행 시간 (초) |
+| ---------- | -----------------------------------------: | ----------------------: |
+| **`run`**  |                 main.stg_game_genre_bridge |                  139.66 |
+|            |                  main.stg_game_mode_bridge |                   69.15 |
+|            |           main.stg_game_perspective_bridge |                   61.92 |
+|            |                             main.dim_games |                 1071.21 |
+| **`run`**  |                                총 **11**개 | **1518.71 (25분 18초)** |
+| **`test`** |                 not_null_dim_games_game_id |                **0.02** |
+|            | not_null_stg_game_mode_bridge_game_mode_id |                **0.01** |
+|            |                   unique_dim_games_game_id |                **0.04** |
+| **`test`** |                                총 **41**개 |  **1684.28 (28분 4초)** |
+
+### v2 트레이드 오프 분석
+
+v2는 v1 대비 파이프라인 총 실행 시간 **55%**(약 1시간)가 감소했습니다. 특히 `test` 단계에서 소요되는 시간이 1/4 정도로 감소했습니다. 실행 단계에서 테이블을 만들어 테스트를 진행한 것이 효과가 있었던 것으로 보이고, 다만 그만큼 테이블을 만들고 저장하는 연산이 실행 단계에 더해지기 때문에 2.5배 정도의 시간이 증가하였습니다.
+
+다음 개선은 `ephemeral` 옵션을 사용하여 실행 단계를 축소합니다. WITH절과 마찬가지로 dimension -> bridge -> fact 테이블의 흐름을 bridge **WITH** dimension -> fact 2단계로 감소시킬 수 있고 처리해야 하는 테이블은 11개에서 6개로 줄어듭니다. 그 다음 SQL문의 설정을 일일이 바꾸던 방법에서 프로젝트 전체를 설정 파일 `dbt_project.yml`에 선언 적용시킵니다.
+
+이 흐름을 따라가면 bridge 테이블을 제외한 차원+팩트 테이블은 임시로 메모리에 올라가 연결되어 최종 dim_games 테이블을 생성하고 저장하게 됩니다.
+
+### v3 - `EPHEMERAL`로 수정 포함, `dbt_project.yml` 설정
+
+> [!IMPORTANT]
+> v2의 실행 결과를 바탕으로, 스테이징 모델을 `ephemeral`(임시)로 변경해 WITH절(인라인 CTE)로 삽입하는 방법으로 `run` 과정을 5단계 생략합니다. 또한 `dbt_project.yml`에 모든 작업 과정을 정의해, 테이블 처리 과정의 비교 효율성을 언급한 최적화를 실행했을 때의 시간을 비교 측정합니다.
+
+<details>
+
+<summary>설정 변경 사항</summary>
+
+```yml
+# dbt_project.yml
+---
+models:
+  transform:
+    staging:
+      +materialized: "{{ 'ephemeral' if target.name == 'prod_s3' else 'view' }}"
+      +schema: staging
+
+      bridge:
+        +materialized: "{{ 'table' if target.name == 'prod_s3' else 'view' }}"
+
+    marts:
+      +materialized: "{{ 'table' if target.name == 'prod_s3' else 'view' }}"
+      +schema: marts
+```
+
+</details>
+
+| 단계       |                           태스크 |         실행 시간 (초) |
+| ---------- | -------------------------------: | ---------------------: |
+| **`run`**  |       main.stg_game_genre_bridge |                 101.63 |
+|            |        main.stg_game_mode_bridge |                 104.95 |
+|            | main.stg_game_perspective_bridge |                 107.41 |
+|            |                   main.dim_games |             **106.93** |
+| **`run`**  |                       총 **6**개 |  **599.81 (9분 59초)** |
+| **`test`** |                      총 **41**개 | **802.38 (13분 22초)** |
+
+### v3 트레이드 오프 분석
+
+v1 대비 약 **79%**, v2 대비 약 **53%** 개선되었습니다. 구체적으로 보면 실행 단계가 `ephemeral`을 활용한 처리 생략으로 인해 v2에서 v1 정도 수준으로 낮아졌고, 테스트 단계는 v2와 비교해도 반 이상 낮아졌습니다. 실행 단계에서 최종 결과물을 모두 테이블화시켜 실제 테스트 비용은 테이블 스캔 수준으로 낮아졌습니다.
+
+개선으로 인해 새로운 차원 테이블(game에는 총 50개 정도의 컬럼이 있습니다)을 추가할 때도 좀 더 효율적인 실행이 가능할 것입니다. 다만 아직도 실시간성과는 거리가 멀고, 산출물이 모두 테이블화 되는 바람에 더더욱 이 모든 단계를 실시간 쿼리처럼 적용하는 것은 쉽지 않습니다만, 도메인 특성 상 실시간성이 필수적으로 요구되지 않고 이는 프로젝트의 방향성에도 중요한 요소가 아니기 때문에 한동안은 개선 작업은 다른 방향으로 이루어질 예정입니다.
+
+### v4 - 파이프라인에 맞춘 설정
+
+> [!IMPORTANT]
+> v3에서 S3 직접 접근을 수정하고, 매크로를 통해 주소를 받아오는 방식으로 수정합니다. staging 단계에서 `game` 데이터는 테이블로 미리 만들고 차원 데이터는 `ephemeral`로 테이블이나 뷰로 남기지 않고 처리합니다. bridge, mart 단계에서는 모두 테이블로 만들어 테스트 시간을 최소화합니다.
+
+<details>
+<summary>설정 변경 사항</summary>
+
+```yml
+# dbt_project.yml
+---
+models:
+  transform:
+    staging:
+      +materialized: "{{ 'ephemeral' if target.name == 'prod_s3' else 'view' }}"
+      +schema: staging
+
+      bridge:
+        +materialized: "{{ 'table' if target.name == 'prod_s3' else 'view' }}"
+
+    marts:
+      +materialized: "{{ 'table' if target.name == 'prod_s3' else 'view' }}"
+      +schema: marts
+```
+
+> `dbt_project.yml`에서 설정을 대부분 table로 통일 -> 테스트 시간 감소
+
+```sql
+-- staging/stg_games.sql
+{{
+  config(
+    materialized = 'table' if target.name == 'prod_s3' else 'view'
+  )
+}}
+
+-- TDD 환경: 로컬 JSONL 파일에서 읽기
+-- Prod 환경: S3 JSONL 파일에서 읽기
+WITH raw_games AS (
+  {% if target.name == 'dev_local_tdd' %}
+  SELECT * FROM read_json_auto('seeds/igdb_games_mock.jsonl')
+  {% else %}
+  SELECT * FROM read_json_auto({{ get_partition_path("games") }})
+  {% endif %}
+),
+
+deduplicated_games AS (
+  SELECT *
+  FROM raw_games
+  QUALIFY ROW_NUMBER() OVER (
+      PARTITION BY id
+      ORDER BY updated_at DESC -- 같은 ID가 있다면 최신 수정일 우선
+  ) = 1
+)
+...
+```
+
+> 스테이징 단계에서 병목일 가능성이 높은 `stg_games.sql` materialized 테이블로 설정, 증분으로 인한 세부 설정 변경
+
+```sql
+-- marts/dim_games.sql
+-- 0. 설정
+{{
+    config(
+        materialized = 'view' if target.name == 'dev_local_tdd' else 'incremental',
+        unique_key = 'game_id',
+        on_schema_change = 'append_new_columns',
+        incremental_strategy = 'merge'
+    )
+}}
+
+-- 1. TDD로 검증된 Staging(재료) 테이블들을 불러옵니다.
+with
+{% if is_incremental() %}
+{% set _check_sql %}
+    select column_name
+    from information_schema.columns
+    where table_schema = '{{ this.schema }}'
+        and table_name = '{{ this.identifier }}'
+        and column_name = 'updated_at'
+{% endset %}
+{% set _check_result = run_query(_check_sql) %}
+{% set has_updated_at = (_check_result is not none) and (_check_result.columns | length > 0) and (_check_result.columns[0].values() | length > 0) %}
+{% endif %}
+
+{% if is_incremental() and has_updated_at %}
+max_timestamp as (
+    select max(updated_at) as max_updated_at from {{ this }}
+),
+{% endif %}
+
+games as (
+    select * from {{ ref('stg_games') }}
+
+    {% if is_incremental() and has_updated_at %}
+    where updated_at > (select max_updated_at from max_timestamp)
+    {% endif %}
+),
+...
+```
+
+> 순환 참조, DuckDB내 `where`절 연산 불가로 인한 sql문 수정
+
+```sql
+-- macro/get_latest_partition.sql
+{% macro get_latest_partition() -%}
+{{ run_started_at.strftime('%Y-%m-%d') }}
+{%- endmacro %}
+
+{% macro get_partition_path(entity_name) -%}
+{%- set cloudfront_domain = env_var("CLOUDFRONT_DOMAIN", "") -%}
+{%- set date = get_latest_partition() -%}
+
+{%- if cloudfront_domain == "" -%}
+    {{ exceptions.raise_compiler_error("CLOUDFRONT_DOMAIN 환경 변수가 설정되지 않았습니다. .env 파일을 확인하세요.") }}
+{%- endif -%}
+
+{%- set manifest_url = "https://" ~ cloudfront_domain ~ "/raw/" ~ entity_name ~ "/dt=" ~ date ~ "/_manifest.json" -%}
+
+{%- if execute -%}
+    {%- set manifest_query = "SELECT UNNEST(files) AS file FROM read_json_auto('" ~ manifest_url ~ "')" -%}
+    {%- set result = run_query(manifest_query) -%}
+
+    {%- if result and result.rows | length > 0 -%}
+        {%- set file_urls = [] -%}
+        {%- for row in result.rows -%}
+            {%- set _ = file_urls.append("'https://" ~ cloudfront_domain ~ "/" ~ row[0] ~ "'") -%}
+        {%- endfor -%}
+[{{ file_urls | join(', ') }}]
+    {%- else -%}
+[]
+    {%- endif -%}
+{%- else -%}
+[]
+{%- endif -%}
+{%- endmacro %}
+
+{% macro get_all_partitions_path(entity_name) -%}
+{%- set cloudfront_domain = env_var("CLOUDFRONT_DOMAIN", "") -%}
+
+{%- if cloudfront_domain == "" -%}
+    {{ exceptions.raise_compiler_error("CLOUDFRONT_DOMAIN 환경 변수가 설정되지 않았습니다.") }}
+{%- endif -%}
+
+https://{{ cloudfront_domain }}/raw/{{ entity_name }}/dt=*/*.jsonl
+{%- endmacro %}
+```
+
+> sql에 manifest를 읽고 파일명을 동적으로 전달하기 위한 매크로 설정
+
+</details>
+
+| 단계       |         태스크 |           실행 시간 (초) |
+| ---------- | -------------: | -----------------------: |
+| **`run`**  | main.dim_games |                 **0.58** |
+| **`run`**  |     총 **7**개 | **506.33 (8분 26.33초)** |
+| **`test`** |    총 **41**개 |        **5.57 (5.57초)** |
+
+### v4 트레이드 오프 분석
+
+테스트 단계에서의 병목은 완전히 사라졌고 이는 테스트하는 모든 테이블을 materialized 설정을 table로 변경하였기 때문입니다. 이외에 실행 단계가 6개에서 7개로 늘어났는데, staging 단계에서 팩트 테이블인 stg_games 테이블 또한 table로 설정하였기 때문입니다.
+
+결과적으로 GitHub Actions에서 파이프라인 스케줄링 준비 상태인 지금, 테스트에서의 병목은 사라졌으며 1개의 팩트 테이블, 5개의 차원 테이블과 bridge 테이블을 처리하는 실행 단계는 약 10분 정도 소요되지만 현재까지 최단 시간입니다.
+
+병기해야 할 것은 이 버전부터 소요 시간인 총 8분 32초 가량은 언급한 6개 테이블을 이용한 초기 데이터 세트 구축 시간이며, 이후에는 구현한 증분 로직을 통해 변경 데이터에 한해 ELT 단계를 통과하므로, 현재의 시간 측정은 파이프라인 첫 실행에 한정됨을 알려드립니다.
