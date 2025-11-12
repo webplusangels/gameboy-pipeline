@@ -33,4 +33,5 @@ class S3Loader(Loader):
             Key=key,
             Body=jsonl_data,
             ContentType="application/x-jsonlines",
+            Tagging="status=temp"
         )
