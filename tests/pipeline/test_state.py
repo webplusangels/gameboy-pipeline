@@ -245,7 +245,8 @@ async def test_s3_state_manager_list_states(mocker, mock_client):
     mock_paginator.paginate = mock_paginate
 
     # 각 엔티티별 상태 파일 응답 모킹
-    async def mock_get_object(bucket, key):
+    async def mock_get_object(**kwargs):
+        key = kwargs.get("Key", "")
         if "games" in key:
             body_data = {
                 "last_run_time": "2025-11-10T10:00:00+00:00",
