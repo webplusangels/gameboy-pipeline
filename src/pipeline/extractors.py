@@ -110,9 +110,7 @@ class BaseIgdbExtractor(Extractor, ABC):
 
             # IGDB Apicalypse 쿼리 문법: where 절 뒤에 sort 추가
             query_str = (
-                f"{self.incremental_query} "
-                f"where updated_at > {query_timestamp}; "
-                f"sort updated_at asc, id asc;"
+                f"{self.incremental_query} where updated_at > {query_timestamp}; sort id asc;"
             )
         else:
             logger.info(f"IGDB {entity_name} 전체 추출 실행.")
