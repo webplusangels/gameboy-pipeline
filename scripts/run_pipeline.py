@@ -50,11 +50,11 @@ ALL_ENTITIES = {
 }
 
 @asynccontextmanager
-async def create_clients() -> AsyncGenerator[tuple[httpx.AsyncClient, Any], None]:
+async def create_clients() -> AsyncGenerator[tuple[httpx.AsyncClient, Any, Any], None]:
     """
     EL 파이프라인에 필요한 비동기 클라이언트를 생성하고 세션을 관리합니다.
     Yields:
-        tuple[httpx.AsyncClient, Any]: HTTP 클라이언트와 기타 필요한 클라이언트 객체
+        tuple[httpx.AsyncClient, Any, Any]: HTTP 클라이언트와 기타 필요한 클라이언트 객체
     """
     logger.info("HTTPX AsyncClient 세션 생성...")
     region = os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
@@ -69,9 +69,10 @@ async def create_clients() -> AsyncGenerator[tuple[httpx.AsyncClient, Any], None
     async with (
         httpx.AsyncClient(timeout=timeout) as http_client,
         session.client("s3", region_name=region) as s3_client,
+        session.client("cloudfront", region_name=region) as cloudfront_client,
     ):
         try:
-            yield http_client, s3_client
+            yield http_client, s3_client, cloudfront_client
         finally:
             logger.info("클라이언트 세션 종료...")
 
@@ -277,7 +278,7 @@ async def main(full_refresh: bool = False, target_date: str | None = None) -> No
         dt_partition = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         logger.info(f"현재 날짜 파티션 사용: {dt_partition}")
 
-    async with create_clients() as (http_client, s3_client):
+    async with create_clients() as (http_client, s3_client, cloudfront_client):
         state_manager = S3StateManager(client=s3_client, bucket_name=bucket_name)
         loader = S3Loader(client=s3_client, bucket_name=bucket_name)
 
@@ -303,6 +304,28 @@ async def main(full_refresh: bool = False, target_date: str | None = None) -> No
                 dt_partition=dt_partition,
                 full_refresh=full_refresh
             )
+
+        dist_id = os.getenv("CLOUDFRONT_DISTRIBUTION_ID")
+        if dist_id:
+            logger.info("CloudFront 캐시 무효화 시작...")
+            try:
+                invalidation_path = f"/raw/*/dt={dt_partition}/_manifest.json"
+
+                await cloudfront_client.create_invalidation(
+                    DistributionId=dist_id,
+                    InvalidationBatch={
+                        'Paths': {
+                            'Quantity': 1,
+                            'Items': [invalidation_path]
+                        },
+                        'CallerReference': str(uuid.uuid4())
+                    }
+                )
+                logger.success(f"CloudFront 캐시 무효화 요청 완료: {invalidation_path}")
+            except Exception as e:
+                logger.error(f"CloudFront 캐시 무효화 실패: {e}")
+        else:
+            logger.warning("CLOUDFRONT_DISTRIBUTION_ID가 설정되지 않아 캐시 무효화를 건너뜁니다.")
 
     pipeline_end_time = time.perf_counter()
     total_elapsed_time = pipeline_end_time - pipeline_start_time

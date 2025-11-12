@@ -1,0 +1,103 @@
+name: ELT Pipeline (Daily)
+
+on:
+  schedule:
+    - cron: "0 19 * * *" # 매일 19:00 UTC (한국 시간 04:00)에 실행
+
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: "실행할 날짜, 형식: YYYY-MM-DD (지정하지 않으면 오늘 날짜로 실행)"
+        required: false
+        type: string
+      full_refresh:
+        description: "전체 데이터를 다시 수집할지 여부 (기본값: false)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  run-elt-pipeline:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+      S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      IGDB_CLIENT_ID: ${{ secrets.IGDB_CLIENT_ID }}
+      IGDB_STATIC_TOKEN: ${{ secrets.IGDB_STATIC_TOKEN }}
+      CLOUDFRONT_DOMAIN: ${{ secrets.CLOUDFRONT_DOMAIN }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+      DBT_PROFILES_DIR: ./transform
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          uv venv
+          uv sync --extra dev
+
+      - name: Determine Target Date
+        id: date
+        run: |
+          if [ "${{ inputs.target_date }}" != "" ]; then
+            echo "DATE=${{ inputs.target_date }}" >> $GITHUB_OUTPUT
+            echo "TARGET_DATE=${{ inputs.target_date }}" >> $GITHUB_STEP_SUMMARY
+
+          else
+            TODAY=$(date +'%Y-%m-%d')
+            echo "DATE=$TODAY" >> $GITHUB_OUTPUT
+            echo "TARGET_DATE=$TODAY" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Run Extract and Load
+        id: el_step
+        timeout-minutes: 30
+        run: |
+          set -e
+          FLAGS="--date ${{ steps.date.outputs.DATE }}"
+
+          if [ "${{ inputs.full_refresh }}" = "true" ]; then
+            FLAGS="$FLAGS --full-refresh"
+            echo "FULL REFRESH: Enabled" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "FULL REFRESH: Disabled" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "Running pipeline with flags: $FLAGS"
+
+          uv run scripts/run_pipeline.py $FLAGS
+
+      - name: Run dbt Transformations
+        if: success()
+        timeout-minutes: 30
+        run: |
+          DBT_FLAGS=""
+          if [ "${{ inputs.full_refresh }}" = "true" ]; then
+            DBT_FLAGS="--full-refresh"
+          fi
+
+          cd transform
+          uv run dbt deps
+
+          echo "Running dbt for partition: ${{ steps.date.outputs.DATE }}"
+
+          uv run dbt run --target prod_s3 \
+            --vars '{"partition_date": "${{ steps.date.outputs.DATE }}"}' \
+            $DBT_FLAGS
+
+          uv run dbt test --target prod_s3 \
+            --vars '{"partition_date": "${{ steps.date.outputs.DATE }}"}' \
