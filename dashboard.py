@@ -64,8 +64,8 @@ st.divider()
 st.sidebar.header("필터 옵션")
 
 # 출시 연도 필터
-min_year = int(df['release_year'].min()) if 'release_year' in df.columns else 2000
-max_year = int(df['release_year'].max()) if 'release_year' in df.columns else 2030
+min_year = int(df['release_year'].dropna().min()) if 'release_year' in df.columns else 2000
+max_year = int(df['release_year'].dropna().max()) if 'release_year' in df.columns else 2030
 selected_years = st.sidebar.slider("출시 연도 범위 선택", min_year, max_year, (2000, 2025))
 
 # 이름 검색
@@ -104,14 +104,19 @@ with col_chart:
 with col_table:
     st.subheader("게임 목록")
     st.dataframe(
-        filtered_df[['game_name', 'release_year', 'platform_names', 'genre_names']].rename(
-            columns={
-                'game_name': '게임 이름',
-                'release_year': '출시 연도',
-                'platform_names': '플랫폼',
-                'genre_names': '장르'
-            }
-        ).sort_values(by='출시 연도', ascending=False).reset_index(drop=True),
+        filtered_df.dropna(subset=['release_year'])[
+            ['game_name', 'release_year', 'platform_names', 'genre_names']
+            ]
+            .rename(
+                columns={
+                    'game_name': '게임 이름',
+                    'release_year': '출시 연도',
+                    'platform_names': '플랫폼',
+                    'genre_names': '장르'
+                }
+        )
+        .sort_values(by='출시 연도', ascending=False)
+        .reset_index(drop=True),
         width='stretch',
         hide_index=True
     )

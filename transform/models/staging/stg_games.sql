@@ -53,8 +53,6 @@ SELECT
   themes,
   game_engines,
   keywords,
-  url,
-  cover,
   first_release_date,
   release_dates,
   screenshots,
