@@ -1,39 +1,17 @@
 -- 0. 설정
 {{
     config(
-        materialized = 'view' if target.name == 'dev_local_tdd' else 'incremental',
-        unique_key = 'game_id',
-        on_schema_change = 'append_new_columns',
-        incremental_strategy = 'merge'
+        materialized = 'view' if target.name == 'dev_local_tdd' else 'table',
+        post_hook = [
+            "COPY (SELECT * FROM {{ this }}) TO 's3://" ~ env_var('S3_BUCKET_NAME') ~ "/marts/dim_games/dim_games.parquet' (FORMAT PARQUET, COMPRESSION 'snappy', OVERWRITE_OR_IGNORE 1)"
+        ] if target.name == 'prod_s3' else []
     )
 }}
 
--- 1. TDD로 검증된 Staging(재료) 테이블들을 불러옵니다.
+-- 오늘 들어온 데이터(manifest) 변환
 with
-{% if is_incremental() %}
-{% set _check_sql %}
-    select column_name
-    from information_schema.columns
-    where table_schema = '{{ this.schema }}'
-        and table_name = '{{ this.identifier }}'
-        and column_name = 'updated_at'
-{% endset %}
-{% set _check_result = run_query(_check_sql) %}
-{% set has_updated_at = (_check_result is not none) and (_check_result.columns | length > 0) and (_check_result.columns[0].values() | length > 0) %}
-{% endif %}
-
-{% if is_incremental() and has_updated_at %}
-max_timestamp as (
-    select max(updated_at) as max_updated_at from {{ this }}
-),
-{% endif %}
-
 games as (
     select * from {{ ref('stg_games') }}
-
-    {% if is_incremental() and has_updated_at %}
-    where updated_at > (select max_updated_at from max_timestamp)
-    {% endif %}
 ),
 
 platforms as (
@@ -56,62 +34,52 @@ player_perspectives as (
     select * from {{ ref('stg_player_perspectives') }}
 ),
 
+-- Bridge 테이블: Inner Join으로 유효한 게임 ID만 필터링합니다.
 game_platforms_bridge as (
     select b.*
     from {{ ref('stg_game_platform_bridge') }} as b
-    {% if is_incremental() and has_updated_at %}
     inner join games as g on b.game_id = g.id
-    {% endif %}
 ),
 
 game_genres_bridge as (
     select b.*
     from {{ ref('stg_game_genre_bridge') }} as b
-    {% if is_incremental() and has_updated_at %}
     inner join games as g on b.game_id = g.id
-    {% endif %}
 ),
 
 game_modes_bridge as (
     select b.*
     from {{ ref('stg_game_mode_bridge') }} as b
-    {% if is_incremental() and has_updated_at %}
     inner join games as g on b.game_id = g.id
-    {% endif %}
 ),
 
 game_themes_bridge as (
     select b.*
     from {{ ref('stg_game_theme_bridge') }} as b
-    {% if is_incremental() and has_updated_at %}
     inner join games as g on b.game_id = g.id
-    {% endif %}
 ),
 
 game_perspectives_bridge as (
     select b.*
     from {{ ref('stg_game_perspective_bridge') }} as b
-    {% if is_incremental() and has_updated_at %}
     inner join games as g on b.game_id = g.id
-    {% endif %}
 ),
 
--- 2. 플랫폼 이름(name)을 JOIN하고, 게임 ID별로 다시 배열(LIST)로 묶습니다.
+-- 집계 테이블들: 각 브릿지 테이블과 명칭 테이블을 JOIN하고, 게임 ID별로 배열(LIST)로 묶습니다.
 platforms_agg as (
     select
         b.game_id,
-        list(p.name) as platform_names -- ["PC", "PlayStation 4"]
+        list(p.name) as platform_names
     from game_platforms_bridge as b
     left join platforms as p
         on b.platform_id = p.id
     group by b.game_id
 ),
 
--- 3. 장르 이름(name)을 JOIN하고, 게임 ID별로 다시 배열(LIST)로 묶습니다.
 genres_agg as (
     select
         b.game_id,
-        list(p.name) as genre_names -- ["Simulator", "Strategy"]
+        list(p.name) as genre_names
     from game_genres_bridge as b
     left join genres as p
         on b.genre_id = p.id
@@ -148,17 +116,22 @@ player_perspectives_agg as (
     group by b.game_id
 ),
 
--- 4. 최종: games 테이블에 모든 '배열' 컬럼들을 JOIN합니다.
-final as (
+-- 새 데이터 최종 형태
+new_processed as (
     select
         g.id as game_id,
         g.name as game_name,
+        g.slug as game_slug,
         g.summary as game_summary,
-        p.platform_names, -- (2단계에서 만든 'platform_names' 배열)
-        gn.genre_names,   -- (3단계에서 만든 'genre_names' 배열)
+        p.platform_names,
+        gn.genre_names,
         gm.game_mode_names,
         gt.theme_names,
         pp.perspective_names,
+        g.url,
+        g.cover,
+        g.first_release_date,
+        g.created_at,
         g.updated_at
         
     from games as g
@@ -172,6 +145,27 @@ final as (
         on g.id = gt.game_id
     left join player_perspectives_agg as pp
         on g.id = pp.game_id
+),
+
+-- 기존 데이터 로드 (S3 -> CloudFront -> DuckDB)
+old_processed as (
+    {% if target.name == 'prod_s3' and not flags.FULL_REFRESH %}
+    select * from read_parquet('https://{{ env_var("CLOUDFRONT_DOMAIN", "") }}/marts/dim_games/dim_games.parquet')
+    {% else %}
+    select * from new_processed where 1=0
+    {% endif %}
+),
+
+-- 병합 및 중복 제거
+combined as (
+    select * from old_processed
+    union all
+    select * from new_processed
 )
 
-select * from final
+select *
+from combined
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY game_id
+    ORDER BY updated_at DESC
+) = 1
