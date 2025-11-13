@@ -83,3 +83,5 @@ Thumbs.db
 
 # Coverage HTML report
 htmlcov/
+
+.streamlit/secrets.toml
