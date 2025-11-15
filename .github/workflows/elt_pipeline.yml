@@ -80,7 +80,7 @@ jobs:
             REASON="Scheduled full refresh on Sunday"
           fi
 
-          echo "FULL REFRESH MODE: $IS_FULL_REFRESH ($REASON)" >> $GITHUB_OUTPUT
+          echo "FULL_REFRESH=$IS_FULL_REFRESH" >> $GITHUB_OUTPUT
 
           echo "### Pipeline Execution Mode" >> $GITHUB_STEP_SUMMARY
           echo "- **Mode**: Full Refresh: $IS_FULL_REFRESH" >> $GITHUB_STEP_SUMMARY
