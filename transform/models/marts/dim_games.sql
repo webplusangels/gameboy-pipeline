@@ -150,7 +150,7 @@ new_processed as (
 -- 기존 데이터 로드 (S3 -> CloudFront -> DuckDB)
 old_processed as (
     {% if target.name == 'prod_s3' and not flags.FULL_REFRESH %}
-    select * from read_parquet('https://{{ env_var("CLOUDFRONT_DOMAIN", "") }}/marts/dim_games/dim_games.parquet')
+    select * from read_parquet('https://{{ env_var("CLOUDFRONT_DOMAIN") }}/marts/dim_games/dim_games.parquet')
     {% else %}
     select * from new_processed where 1=0
     {% endif %}

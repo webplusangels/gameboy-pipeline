@@ -2,7 +2,7 @@ name: ELT Pipeline (Daily)
 
 on:
   schedule:
-    - cron: "0 19 * * *" # 매일 19:00 UTC (한국 시간 04:00)에 실행
+    - cron: "0 19 * * *" # 매일 19:00 UTC (한국 시간 04:00)에 실행, 주말에 full refresh
 
   workflow_dispatch:
     inputs:
@@ -63,6 +63,30 @@ jobs:
             echo "TARGET_DATE=$TODAY" >> $GITHUB_STEP_SUMMARY
           fi
 
+      - name: Determine Full Refresh Mode
+        id: full_refresh
+        run: |
+          IS_FULL_REFRESH="false"
+          REASON="Daily scheduled run"
+
+          if [ "${{ inputs.full_refresh }}" == "true" ]; then
+            IS_FULL_REFRESH="true"
+            REASON="Manual trigger"
+          fi
+
+          DAY_OF_WEEK=$(date +%u)
+          if [ "${{ github.event_name }}" == "schedule" ] && [ "$DAY_OF_WEEK" == "7" ]; then
+            IS_FULL_REFRESH="true"
+            REASON="Scheduled full refresh on Sunday"
+          fi
+
+          echo "FULL_REFRESH=$IS_FULL_REFRESH" >> $GITHUB_OUTPUT
+
+          echo "### Pipeline Execution Mode" >> $GITHUB_STEP_SUMMARY
+          echo "- **Mode**: Full Refresh: $IS_FULL_REFRESH" >> $GITHUB_STEP_SUMMARY
+          echo "- **Reason**: $REASON" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Date**: ${{ steps.date.outputs.DATE }}" >> $GITHUB_STEP_SUMMARY
+
       - name: Run Extract and Load
         id: el_step
         timeout-minutes: 30
@@ -70,7 +94,7 @@ jobs:
           set -e
           FLAGS="--date ${{ steps.date.outputs.DATE }}"
 
-          if [ "${{ inputs.full_refresh }}" = "true" ]; then
+          if [ "${{ steps.full_refresh.outputs.FULL_REFRESH }}" = "true" ]; then
             FLAGS="$FLAGS --full-refresh"
             echo "FULL REFRESH: Enabled" >> $GITHUB_STEP_SUMMARY
           else
@@ -88,7 +112,7 @@ jobs:
           DBT_PROFILES_DIR: .
         run: |
           DBT_FLAGS=""
-          if [ "${{ inputs.full_refresh }}" = "true" ]; then
+          if [ "${{ steps.full_refresh.outputs.FULL_REFRESH }}" = "true" ]; then
             DBT_FLAGS="--full-refresh"
           fi
 

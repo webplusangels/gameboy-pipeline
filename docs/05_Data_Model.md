@@ -19,3 +19,5 @@
 | genres      | ARRAY  | 장르 목록 (unnested) | stg_game_genre_bridge    |
 | platforms   | ARRAY  | 플랫폼 목록          | stg_game_platform_bridge |
 | ...         | ...    | ...                  | ...                      |
+
+_업데이트 [2025.11.14]_
