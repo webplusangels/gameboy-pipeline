@@ -81,3 +81,4 @@
 - **2025.11.11**: 증분 업데이트
 - **2025.11.11**: 오케스트레이션 스크립트 작성
 - **2025.11.13**: `Streamlit` [배포](https://gameboy-pipeline-f9xnvfsfs54eapgwteldez.streamlit.app/)
+- **2025.11.15**: 파이프라인 증분 버그 수정 및 문서 수정
