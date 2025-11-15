@@ -15,5 +15,5 @@ SELECT
 {% if target.name == 'dev_local_tdd' %}
 FROM read_json_auto('seeds/igdb_platforms_mock.jsonl')
 {% else %}
-FROM read_json_auto({{ get_partition_path("platforms") }}, ignore_errors = TRUE)
+FROM read_json_auto({{ get_dimension_path("platforms") }}, ignore_errors = TRUE)
 {% endif %}
