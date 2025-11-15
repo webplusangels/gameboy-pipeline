@@ -7,7 +7,7 @@ WITH raw_games AS (
 )
 {% else %}
 WITH raw_games AS (
-  SELECT * FROM read_json_auto({{ get_partition_path("games") }})
+  SELECT * FROM {{ ref('stg_games') }}
 )
 {% endif %}
 

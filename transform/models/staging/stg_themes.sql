@@ -11,5 +11,5 @@ SELECT
 {% if target.name == 'dev_local_tdd' %}
 FROM read_json_auto('seeds/igdb_themes_mock.jsonl')
 {% else %}
-FROM read_json_auto({{ get_partition_path("themes") }})
+FROM read_json_auto({{ get_partition_path("themes") }}, ignore_errors = TRUE)
 {% endif %}

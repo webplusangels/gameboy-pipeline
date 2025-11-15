@@ -10,7 +10,9 @@ WITH raw_games AS (
   {% if target.name == 'dev_local_tdd' %}
   SELECT * FROM read_json_auto('seeds/igdb_games_mock.jsonl')
   {% else %}
-  SELECT * FROM read_json_auto({{ get_partition_path("games") }})
+  SELECT * FROM read_json_auto({{ get_partition_path("games") }}, 
+  ignore_errors = true
+  )
   {% endif %}
 ),
 
