@@ -8,9 +8,12 @@
 
 [![CI Status](https://github.com/webplusangels/gameboy-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/webplusangels/gameboy-pipeline/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/webplusangels/gameboy-pipeline/graph/badge.svg)](https://codecov.io/gh/webplusangels/gameboy-pipeline)
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://gameboy-pipeline-f9xnvfsfs54eapgwteldez.streamlit.app/)
 
 ## 라이브 데모
+
+파이프라인이 수집한 게임 데이터를 실시간으로 탐색해보세요.
+
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://gameboy-pipeline-f9xnvfsfs54eapgwteldez.streamlit.app/)
 
 ## 아키텍처 다이어그램
 
@@ -34,7 +37,7 @@
 
 ## 왜 만들었는가
 
-> **문제:** 기존 [game-pricing-pipeline](링크)에서 경험한 유지보수의 어려움  
+> **문제:** 기존 [game-pricing-pipeline](https://github.com/webplusangels/game-pricing-pipeline)에서 경험한 유지보수의 어려움  
 > **해결:** TDD와 타입 안정성을 바탕으로 한 현대적인 재설계
 
 [game-pricing-pipeline](https://github.com/webplusangels/game-pricing-pipeline)은 인기 게임들의 정보와 특가 정보를 제공하고, 간단하지만 편리한 팀 파인드 서비스를 제공하는 프로젝트인 [WARA:B](https://github.com/100-hours-a-week/9-team-gudokjohayo-warab-be)(백엔드 레포)의 일부로, 운영을 위한 데이터 수집, 업데이트 등 프로젝트에 필요한 데이터 관련 작업을 자동화하기 위해 개발된 파이프라인 모듈입니다.
@@ -58,7 +61,155 @@
 
 ## 성능 요약
 
+### 벤치마크 결과
+
+| 항목                | 이전 (game-pricing-pipeline) | 현재 (gameboy-pipeline) | 개선율       |
+| ------------------- | ---------------------------- | ----------------------- | ------------ |
+| **API 호출 방식**   | 동기 (순차)                  | 비동기 (병렬)           | **6배 향상** |
+| **100개 게임 수집** | ~240초                       | ~0.14초                 | **1,700배**  |
+| **응답 성공률**     | 95%                          | 100%                    | **5%p 향상** |
+| **저장 공간**       | JSON (~500MB)                | Parquet (~150MB)        | **70% 절감** |
+
+### 비용 효율성
+
+- **인프라 비용**: $0/월
+- **S3 스토리지**: ~$0.03/월 (1GB 기준)
+- **데이터 전송**: ~$0.05/월 (CloudFront 캐싱)
+- **총 운영 비용**: **< $0.1/월**
+
+### 주요 최적화 기법
+
+1. **비동기 I/O**: `httpx` + `asyncio`로 API 대기 시간 최소화
+2. **증분 적재**: 변경된 데이터만 수집 (Full Refresh 대비 95% 시간 절약)
+3. **CloudFront CDN**: S3 DTO 비용 90% 절감
+4. **컬럼 기반 압축**: Parquet Snappy 압축으로 저장/전송 최적화
+
+자세한 분석은 [성능 측정 문서](./docs/04_Performance.md)를 참고하세요.
+
+## 기술 스택
+
+### 데이터 파이프라인
+
+| 계층              | 기술                | 역할                            |
+| ----------------- | ------------------- | ------------------------------- |
+| **Extract**       | `httpx` + `asyncio` | IGDB API 비동기 데이터 수집     |
+| **Load**          | `aioboto3` + S3     | JSONL 형식으로 원본 데이터 저장 |
+| **Transform**     | `dbt` + `DuckDB`    | SQL 기반 데이터 변환 및 모델링  |
+| **Orchestration** | GitHub Actions      | 일일 스케줄링 (매일 11시 KST)   |
+
+### 인프라
+
+- **스토리지**: AWS S3 (Data Lake)
+- **CDN**: CloudFront (DTO 비용 90% 절감)
+- **분석 DB**: DuckDB (서버리스, 비용 $0)
+- **시각화**: Streamlit Community Cloud
+
+### 개발 도구
+
+- **언어**: Python 3.12
+- **패키지 관리**: uv (Ruff 툴체인)
+- **테스팅**: pytest + pytest-asyncio + pytest-cov
+- **타입 체킹**: mypy (strict mode)
+- **린팅**: Ruff (linter + formatter)
+- **CI/CD**: GitHub Actions
+
+자세한 선택 배경은 [기술 스택 문서](./docs/02_Tech_Stacks.md)를 참고하세요.
+
 ## Quick Start
+
+### 사전 요구사항
+
+- Python 3.11 이상
+- [uv](https://github.com/astral-sh/uv) (권장) 또는 pip
+- AWS 계정 (프로덕션 배포 시)
+- IGDB API 키 ([발급 방법](https://api-docs.igdb.com/#account-creation))
+
+<details>
+
+<summary><b>Quick Start 펼쳐보기</b></summary>
+
+### 1. 설치
+
+```bash
+# 저장소 클론
+git clone https://github.com/webplusangels/gameboy-pipeline.git
+cd gameboy-pipeline
+
+# 의존성 설치 (uv 사용)
+uv sync --extra dev
+
+# 또는 pip 사용
+pip install -r requirements.txt
+```
+
+### 2. 환경 설정
+
+```bash
+# .env 파일 생성
+cp .env.example .env
+
+# 필수 환경 변수 입력
+# IGDB_CLIENT_ID=your_client_id
+# IGDB_STATIC_TOKEN=your_token
+# AWS_ACCESS_KEY_ID=your_key (옵션)
+# AWS_SECRET_ACCESS_KEY=your_secret (옵션)
+```
+
+### 3. 로컬 실행
+
+**테스트 실행**:
+
+```bash
+uv run pytest tests/ -v
+```
+
+**파이프라인 실행 (로컬 모드)**:
+
+```bash
+# Dry-run (API 호출 없이 검증만)
+uv run scripts/run_pipeline.py --dry-run
+
+# 실제 실행 (첫 100개 게임만)
+uv run scripts/run_pipeline.py --entity games --limit 100
+```
+
+**dbt 변환 실행**:
+
+```bash
+cd transform
+uv run dbt run --target dev_local_tdd
+uv run dbt test  # 데이터 품질 검증
+```
+
+### 4. 대시보드 확인
+
+```bash
+# Streamlit 로컬 실행
+uv run streamlit run dashboard/app.py
+```
+
+브라우저에서 `http://localhost:8501` 접속
+
+### 트러블슈팅
+
+**Q: IGDB API 401 Unauthorized 오류**
+
+- A: `.env` 파일의 `IGDB_CLIENT_ID`와 `IGDB_STATIC_TOKEN` 확인
+- A: 토큰 만료 시 [재발급](https://api-docs.igdb.com/#authentication) 필요
+
+**Q: dbt 실행 시 파일을 찾을 수 없음**
+
+- A: 로컬 모드에서는 `dev_local_tdd` 타겟 사용 (`dbt run --target dev_local_tdd`)
+- A: S3 경로 대신 로컬 파일 시스템 사용
+
+**Q: 테스트 실패**
+
+- A: Mock 데이터 확인: `tests/test_data/` 디렉토리
+- A: 의존성 재설치: `uv sync --extra dev`
+
+</details>
+
+더 많은 정보는 [개발 가이드](./CONTRIBUTING.md)를 참조하세요.
 
 ## 링크
 
@@ -71,14 +222,7 @@
 
 ## 타임라인
 
-- **2025.11.01**: [IGDB API](https://www.igdb.com/)를 활용한 ELT 파이프라인 개발 시작
-- **2025.11.03**: Extractor 모듈
-- **2025.11.04**: Loader 모듈
-- **2025.11.05**: 차원 데이터를 위한 Extractor로 확장
-- **2025.11.07**: `dbt` Transform 레이어
-- **2025.11.08**: E2E 테스트
-- **2025.11.10**: 벤치마크 테스트
-- **2025.11.11**: 증분 업데이트
-- **2025.11.11**: 오케스트레이션 스크립트 작성
-- **2025.11.13**: `Streamlit` [배포](https://gameboy-pipeline-f9xnvfsfs54eapgwteldez.streamlit.app/)
-- **2025.11.15**: 파이프라인 증분 버그 수정 및 문서 수정
+- **2025.11.01**: 프로젝트 시작
+- **2025.11.10**: ELT 파이프라인 완성 (E2E 테스트 통과)
+- **2025.11.13**: [Streamlit 대시보드](https://gameboy-pipeline-f9xnvfsfs54eapgwteldez.streamlit.app/) 배포
+- **2025.11.24**: 문서화 완료
