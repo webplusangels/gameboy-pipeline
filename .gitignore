@@ -40,7 +40,6 @@ temp/
 .ipynb_checkpoints/
 
 # Data artifacts (large / generated)
-data/
 raw_data/
 processed_data/
 outputs/

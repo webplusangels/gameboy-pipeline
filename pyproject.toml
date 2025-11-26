@@ -22,6 +22,9 @@ dependencies = [
     "pandas>=2.3.3",
     "pyarrow>=21.0.0",
     "plotly>=6.4.0",
+    "radon>=6.0.1",
+    "pygount>=3.1.0",
+    "pytest-benchmark>=5.2.3",
 ]
 
 [project.optional-dependencies]
@@ -91,7 +94,7 @@ plugins = ["pydantic.mypy"]
 
 # Ignore missing type stubs for third-party libraries
 [[tool.mypy.overrides]]
-module = "botocore.*"
+module = ["botocore.*", "aioboto3.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]
