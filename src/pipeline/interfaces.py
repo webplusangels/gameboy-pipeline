@@ -12,9 +12,13 @@ class Extractor(ABC):
     """
 
     @abstractmethod
-    async def extract(self) -> AsyncGenerator[dict[str, Any], None]:
+    async def extract(self, last_updated_at: datetime | None) -> AsyncGenerator[dict[str, Any], None]:
         """
         외부 소스로부터 데이터를 추출합니다.
+
+        Args:
+            last_updated_at (datetime | None): 증분 추출을 위한 마지막 업데이트 시간.
+                None인 경우 전체 데이터를 추출합니다.
 
         Yields:
             dict[str, Any]: 추출된 데이터 항목.
