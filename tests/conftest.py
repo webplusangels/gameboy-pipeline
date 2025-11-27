@@ -1,9 +1,15 @@
 import json
+import os
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+
+# 테스트 환경변수 설정 (Settings 로드 전에 설정해야 함)
+os.environ.setdefault("IGDB_CLIENT_ID", "test-client-id")
+os.environ.setdefault("IGDB_CLIENT_SECRET", "test-client-secret")
+os.environ.setdefault("IGDB_STATIC_TOKEN", "test-static-token")
 
 from src.pipeline.interfaces import AuthProvider
 

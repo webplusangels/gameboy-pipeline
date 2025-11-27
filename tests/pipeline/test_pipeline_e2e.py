@@ -1,24 +1,22 @@
 import json
-import os
 import uuid
 
 import aioboto3
 import httpx
 import pytest
-from dotenv import load_dotenv
 
+from src.config import settings
 from src.pipeline.auth import StaticAuthProvider
 from src.pipeline.extractors import IgdbExtractor
 from src.pipeline.loaders import S3Loader
 
-load_dotenv()
 pytestmark = pytest.mark.integration
 
 
 @pytest.fixture(scope="function")
 async def s3_client():
     """실제 aioboto3 S3 클라이언트 세션을 생성합니다."""
-    region = os.getenv("AWS_DEFAULT_REGION")
+    region = settings.aws_default_region
 
     session = aioboto3.Session(region_name=region)
     async with session.client("s3", region_name=region) as client:
@@ -31,9 +29,9 @@ async def test_e2e_pipeline_extractor_to_loader(s3_client):
     [E2E]
     Extractor와 Loader를 실제로 연결하여 E -> (Batch) -> L 파이프라인이 정상적으로 동작하는지 테스트합니다.
     """
-    token = os.getenv("IGDB_STATIC_TOKEN")
-    client_id = os.getenv("IGDB_CLIENT_ID")
-    bucket_name = os.getenv("S3_BUCKET_NAME")
+    token = settings.igdb_static_token
+    client_id = settings.igdb_client_id
+    bucket_name = settings.s3_bucket_name
 
     if not token or not client_id or not bucket_name:
         pytest.skip(

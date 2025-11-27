@@ -3,13 +3,12 @@ import os
 
 import httpx
 import pytest
-from dotenv import load_dotenv
 from loguru import logger
 
+from src.config import settings
 from src.pipeline.auth import StaticAuthProvider
 from src.pipeline.extractors import IgdbPlatformExtractor
 
-load_dotenv()
 
 pytestmark = pytest.mark.integration
 
@@ -21,8 +20,8 @@ async def test_igdb_platform_extractor_it_fetches_real_data(mocker):
     - IgdbPlatformExtractor가 실제 IGDB API로부터 플랫폼 데이터를 성공적으로 가져오는지 테스트합니다.
     - .env에 IGDB API 자격 증명이 올바르게 설정되어 있어야 합니다.
     """
-    token = os.getenv("IGDB_STATIC_TOKEN")
-    client_id = os.getenv("IGDB_CLIENT_ID")
+    token = settings.igdb_static_token
+    client_id = settings.igdb_client_id
 
     if not token or not client_id:
         pytest.skip(
