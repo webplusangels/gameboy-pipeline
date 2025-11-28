@@ -2,6 +2,7 @@ import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
+from more_itertools import side_effect
 import pytest
 from botocore.exceptions import ClientError
 
@@ -9,7 +10,7 @@ from src.pipeline.state import S3StateManager
 
 
 @pytest.mark.asyncio
-async def test_s3_state_manager_get_last_run_time_exists(mocker, mock_client):
+async def test_s3_state_manager_get_last_run_time_exists(mock_client):
     """
     [GREEN]
     S3StateManager가 존재하는 상태를 올바르게 조회하는지 테스트합니다.
@@ -44,7 +45,7 @@ async def test_s3_state_manager_get_last_run_time_exists(mocker, mock_client):
 
 
 @pytest.mark.asyncio
-async def test_s3_state_manager_get_last_run_time_not_exists(mocker, mock_client):
+async def test_s3_state_manager_get_last_run_time_not_exists(mock_client):
     """
     [GREEN]
     S3StateManager가 상태 파일이 없을 때 None을 반환하는지 테스트합니다.
@@ -66,7 +67,7 @@ async def test_s3_state_manager_get_last_run_time_not_exists(mocker, mock_client
 
 @pytest.mark.asyncio
 async def test_s3_state_manager_get_last_run_time_entity_not_in_state(
-    mocker, mock_client
+    mock_client
 ):
     """
     [GREEN]
@@ -91,7 +92,7 @@ async def test_s3_state_manager_get_last_run_time_entity_not_in_state(
 
 
 @pytest.mark.asyncio
-async def test_s3_state_manager_save_last_run_time_new_state(mocker, mock_client):
+async def test_s3_state_manager_save_last_run_time_new_state(mock_client):
     """
     [GREEN]
     S3StateManager가 새로운 상태를 올바르게 저장하는지 테스트합니다.
@@ -125,7 +126,7 @@ async def test_s3_state_manager_save_last_run_time_new_state(mocker, mock_client
 
 
 @pytest.mark.asyncio
-async def test_s3_state_manager_save_last_run_time_update_existing(mocker, mock_client):
+async def test_s3_state_manager_save_last_run_time_update_existing(mock_client):
     """
     [GREEN]
     기존 상태를 업데이트하는 시나리오 테스트
@@ -165,7 +166,7 @@ async def test_s3_state_manager_save_last_run_time_update_existing(mocker, mock_
 
 
 @pytest.mark.asyncio
-async def test_s3_state_manager_save_last_run_time_naive_datetime(mocker, mock_client):
+async def test_s3_state_manager_save_last_run_time_naive_datetime(mock_client):
     """
     [GREEN]
     timezone-naive datetime을 저장할 때 UTC로 간주하는지 테스트합니다.
@@ -200,12 +201,11 @@ async def test_s3_state_manager_save_last_run_time_naive_datetime(mocker, mock_c
 
 
 @pytest.mark.asyncio
-async def test_s3_state_manager_reset_state(mocker, mock_client):
+async def test_s3_state_manager_reset_state(mock_client):
     """
     [GREEN]
     S3StateManager의 상태 초기화 기능 테스트
     """
-
     mock_s3_client = mock_client
     mock_s3_client.delete_object = AsyncMock()
 
@@ -221,12 +221,11 @@ async def test_s3_state_manager_reset_state(mocker, mock_client):
 
 
 @pytest.mark.asyncio
-async def test_s3_state_manager_list_states(mocker, mock_client):
+async def test_s3_state_manager_list_states(mock_client):
     """
     [GREEN]
     모든 엔티티 상태 조회 기능 테스트
     """
-
     mock_s3_client = mock_client
 
     # list_objects_v2 paginator 모킹
@@ -277,3 +276,117 @@ async def test_s3_state_manager_list_states(mocker, mock_client):
     assert "platforms" in result
     assert result["games"].isoformat() == "2025-11-10T10:00:00+00:00"
     assert result["platforms"].isoformat() == "2025-11-09T15:30:00+00:00"
+
+@pytest.mark.asyncio
+async def test_s3_state_manager_client_error_handling(mock_client):
+    """
+    S3StateManager가 S3 클라이언트 오류를 적절히 처리하는지 테스트합니다.
+    """
+    mock_s3_client = mock_client
+    mock_s3_client.get_object = AsyncMock(
+        side_effect=ClientError({"Error": {"Code": "500", "Message": "InternalError"}}, "GetObject")
+    )
+
+    state_manager = S3StateManager(
+        client=mock_s3_client, bucket_name="test-bucket", state_prefix="pipeline/state/"
+    )
+
+    with pytest.raises(ClientError) as exc_info:
+        await state_manager.get_last_run_time("games")
+
+    assert exc_info.value.response["Error"]["Code"] == "500"
+    assert exc_info.value.response["Error"]["Message"] == "InternalError"
+
+@pytest.mark.asyncio
+async def test_s3_state_manager_exception_handling(mock_client):
+    """
+    S3StateManager가 일반 예외를 적절히 처리하는지 테스트합니다.
+    """
+    mock_s3_client = mock_client
+    mock_s3_client.get_object = AsyncMock(
+        side_effect=ValueError("Some unexpected error")
+    )
+
+    state_manager = S3StateManager(
+        client=mock_s3_client, bucket_name="test-bucket", state_prefix="pipeline/state/"
+    )
+
+    result = await state_manager.get_last_run_time("games")
+    assert result is None
+
+@pytest.mark.asyncio
+async def test_s3_state_manager_save_last_run_time_client_error_handling(mock_client):
+    """
+    S3StateManager의 save_last_run_time 메서드가 S3 클라이언트 오류를 적절히 처리하는지 테스트합니다.
+    """
+    mock_s3_client = mock_client
+    mock_s3_client.get_object = AsyncMock(
+        side_effect=ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "Access Denied"}},
+            "GetObject"
+        )
+    )
+
+    state_manager = S3StateManager(
+        client=mock_s3_client, bucket_name="test-bucket"
+    )
+
+    with pytest.raises(ClientError) as exc_info:
+        await state_manager.save_last_run_time("games", datetime.now(UTC))
+
+    assert exc_info.value.response["Error"]["Code"] == "AccessDenied"
+    # put_object이 호출되지 않았는지 확인
+    mock_s3_client.put_object.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_s3_state_manager_save_last_run_time_put_object_failure(mock_client):
+    """
+    S3StateManager의 save_last_run_time 메서드가 S3 put_object 실패를 적절히 처리하는지 테스트합니다.
+
+    실패 시에 예외를 전파함
+    """
+    mock_s3_client = mock_client
+    mock_s3_client.get_object = AsyncMock(
+        side_effect=ClientError(
+            {"Error": {"Code": "NoSuchKey"}},
+            "GetObject"
+        )
+    )
+
+    mock_s3_client.put_object = AsyncMock(
+        side_effect=ClientError(
+            {"Error": {"Code": "InternalError", "Message": "Internal Server Error"}},
+            "PutObject"
+        )
+    )
+
+    state_manager = S3StateManager(
+        client=mock_s3_client, bucket_name="test-bucket"
+    )
+
+    with pytest.raises(ClientError) as exc_info:
+        await state_manager.save_last_run_time("games", datetime.now(UTC))
+
+    assert exc_info.value.response["Error"]["Code"] == "InternalError"
+
+@pytest.mark.asyncio
+async def test_s3_state_manager_reset_state_failure(mock_client):
+    """
+    S3StateManager의 reset_state 메서드가 S3 삭제 실패를 적절히 처리하는지 테스트합니다.
+    """
+    mock_s3_client = mock_client
+    mock_s3_client.delete_object = AsyncMock(
+        side_effect=ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "Access Denied"}},
+            "DeleteObject"
+        )
+    )
+    
+    state_manager = S3StateManager(
+        client=mock_s3_client, bucket_name="test-bucket"
+    )
+    
+    with pytest.raises(ClientError) as exc_info:
+        await state_manager.reset_state("games")
+    
+    assert exc_info.value.response["Error"]["Code"] == "AccessDenied"

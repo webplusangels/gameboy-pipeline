@@ -14,7 +14,7 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.asyncio
-async def test_igdb_platform_extractor_it_fetches_real_data(mocker):
+async def test_igdb_platform_extractor_it_fetches_real_data():
     """
     [INTEGRATION]
     - IgdbPlatformExtractor가 실제 IGDB API로부터 플랫폼 데이터를 성공적으로 가져오는지 테스트합니다.

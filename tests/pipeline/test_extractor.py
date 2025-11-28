@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from datetime import UTC, datetime, timedelta
 
 from src.pipeline.extractors import BaseIgdbExtractor, IgdbExtractor
 from src.pipeline.interfaces import AuthProvider, Extractor
@@ -40,7 +41,6 @@ async def test_igdb_extractor_conforms_to_interface():
 
 @pytest.mark.asyncio
 async def test_igdb_extractor_returns_mock_data(
-    mocker,
     mock_client: AsyncMock,
     mock_auth_provider: AuthProvider,
     mock_game_data: list[dict],
@@ -92,7 +92,7 @@ async def test_igdb_extractor_returns_mock_data(
 
 @pytest.mark.asyncio
 async def test_igdb_extractor_handles_http_error(
-    mocker, mock_client: AsyncMock, mock_auth_provider: AuthProvider
+    mock_client: AsyncMock, mock_auth_provider: AuthProvider
 ):
     """
     [GREEN]
@@ -116,7 +116,7 @@ async def test_igdb_extractor_handles_http_error(
 
 @pytest.mark.asyncio
 async def test_igdb_extractor_handles_pagination_empty_first_page(
-    mocker, mock_client: AsyncMock, mock_auth_provider: AuthProvider
+    mock_client: AsyncMock, mock_auth_provider: AuthProvider
 ):
     """
     [GREEN]
@@ -152,3 +152,109 @@ async def test_igdb_extractor_handles_pagination_empty_first_page(
 
     # 2. API 호출 횟수 검증
     assert mock_client.post.call_count == 1
+
+@pytest.mark.asyncio
+async def test_igdb_extractor_query_configuration(
+    mock_client: AsyncMock, mock_auth_provider: AuthProvider
+):
+    """
+    IgdbExtractor의 쿼리 구성 속성들이 올바른지 테스트합니다.
+
+    Verifies:
+        1. base_query 속성 값
+        2. incremental_query 속성 값
+        3. limit 속성 값
+        4. safety_margin_minutes 속성 값
+    """
+    extractor = IgdbExtractor(
+        client=mock_client, auth_provider=mock_auth_provider, client_id="mock-client-id"
+    )
+
+    # 1. base_query 검증
+    assert extractor.base_query == "fields *; sort id asc;"
+
+    # 2. incremental_query 검증
+    assert extractor.incremental_query == "fields *;"
+
+    # 3. limit 검증
+    assert extractor.limit == 500
+
+    # 4. safety_margin_minutes 검증
+    assert extractor.safety_margin_minutes == 5
+
+
+@pytest.mark.asyncio
+async def test_incremental_extract_applies_safety_margin_to_query(
+    mock_client: AsyncMock,
+    mock_auth_provider: AuthProvider,
+) -> None:
+    """증분 추출 시 안전 마진이 적용된 쿼리가 생성된다."""
+    # Arrange: IgdbExtractor의 기본 safety_margin_minutes는 5분
+    extractor = IgdbExtractor(
+        client=mock_client,
+        auth_provider=mock_auth_provider,
+        client_id="test-client-id",
+    )
+
+    last_updated_at = datetime(2025, 11, 28, 12, 0, 0, tzinfo=UTC)
+    expected_safe_timestamp = last_updated_at - timedelta(minutes=5)
+    expected_unix_timestamp = int(expected_safe_timestamp.timestamp())
+
+    # Mock 응답: 빈 결과 (쿼리 검증이 목적)
+    mock_response = Mock(
+        status_code=200,
+        json=lambda: [],
+        raise_for_status=lambda: None,
+    )
+    mock_client.post.return_value = mock_response
+
+    # Act
+    _ = [item async for item in extractor.extract(last_updated_at=last_updated_at)]
+
+    # Assert: HTTP 요청의 content 파라미터 검증
+    mock_client.post.assert_called()
+    call_args = mock_client.post.call_args
+    query_data = call_args.kwargs.get("content", "")
+
+    # 쿼리에 올바른 timestamp가 포함되어 있는지 확인
+    assert f"where updated_at > {expected_unix_timestamp}" in query_data
+    assert "sort id asc" in query_data
+
+
+@pytest.mark.asyncio
+async def test_incremental_extract_calculates_correct_timestamp(
+    mock_client: AsyncMock,
+    mock_auth_provider: AuthProvider,
+) -> None:
+    """다양한 시점에서 안전 마진이 적용된 Unix timestamp가 정확히 계산된다."""
+    # Arrange: IgdbExtractor의 기본 safety_margin_minutes는 5분
+    extractor = IgdbExtractor(
+        client=mock_client,
+        auth_provider=mock_auth_provider,
+        client_id="test-client-id",
+    )
+    safety_margin = extractor.safety_margin_minutes  # 5분
+
+    # 특정 시점 설정
+    last_updated_at = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+    # 예상 계산
+    expected_safe_time = last_updated_at - timedelta(minutes=safety_margin)
+    expected_timestamp = int(expected_safe_time.timestamp())
+
+    mock_response = Mock(
+        status_code=200,
+        json=lambda: [],
+        raise_for_status=lambda: None,
+    )
+    mock_client.post.return_value = mock_response
+
+    # Act
+    _ = [item async for item in extractor.extract(last_updated_at=last_updated_at)]
+
+    # Assert
+    call_args = mock_client.post.call_args
+    query_data = call_args.kwargs.get("content", "")
+
+    # timestamp 값이 정확히 일치하는지 검증
+    assert str(expected_timestamp) in query_data

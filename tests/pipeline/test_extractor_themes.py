@@ -22,7 +22,7 @@ async def test_theme_extractor_conforms_to_interface():
 
 @pytest.mark.asyncio
 async def test_theme_extractor_fetches_and_pages_data(
-    mocker, mock_client: AsyncMock, mock_auth_provider: AuthProvider
+    mock_client: AsyncMock, mock_auth_provider: AuthProvider
 ):
     """
     [GREEN]
