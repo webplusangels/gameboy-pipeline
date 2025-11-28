@@ -48,14 +48,24 @@ class Settings(BaseSettings):
     # redis_url: str | None = None
 
     # AWS 파이프라인 설정
-    aws_default_region: str = Field(default="ap-northeast-2", description="AWS Default Region")
+    aws_default_region: str = Field(
+        default="ap-northeast-2", description="AWS Default Region"
+    )
     aws_access_key_id: str | None = Field(default=None, description="AWS Access Key ID")
-    aws_secret_access_key: str | None = Field(default=None, description="AWS Secret Access Key")
-    s3_bucket_name: str | None = Field(default=None, description="S3 Bucket Name for Data Lake")
+    aws_secret_access_key: str | None = Field(
+        default=None, description="AWS Secret Access Key"
+    )
+    s3_bucket_name: str | None = Field(
+        default=None, description="S3 Bucket Name for Data Lake"
+    )
     cloudfront_domain: str | None = Field(default=None, description="CloudFront Domain")
-    cloudfront_distribution_id: str | None = Field(default=None, description="CloudFront Distribution ID")
+    cloudfront_distribution_id: str | None = Field(
+        default=None, description="CloudFront Distribution ID"
+    )
 
-    batch_size: PositiveInt = Field(default=50000, description="Batch size for data processing")
+    batch_size: PositiveInt = Field(
+        default=50000, description="Batch size for data processing"
+    )
 
     class ConfigDict:
         """Pydantic 설정."""

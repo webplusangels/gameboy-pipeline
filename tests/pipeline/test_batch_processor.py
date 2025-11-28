@@ -39,6 +39,7 @@ async def test_batch_processor_chunks_data_correctly(
 
     assert mock_loader.load.call_count == 3
 
+
 @pytest.mark.asyncio
 async def test_batch_processor_handles_no_data(
     mock_loader: AsyncMock, mock_extractor: AsyncMock
@@ -50,6 +51,7 @@ async def test_batch_processor_handles_no_data(
         1. 데이터가 없을 때도 올바르게 처리되는지
         2. Loader가 호출되지 않는지
     """
+
     async def async_generator(*args, **kwargs):
         if False:
             yield  # 아무것도 생성하지 않음
@@ -69,6 +71,7 @@ async def test_batch_processor_handles_no_data(
     assert len(result.uploaded_files) == 0
 
     mock_loader.load.assert_not_called()
+
 
 @pytest.mark.asyncio
 async def test_batch_processor_batch_size(

@@ -29,13 +29,24 @@ async def test_orchestrator_run_full_refresh(
         batch_count=2,
     )
 
-    with patch("src.pipeline.orchestrator.BatchProcessor") as mock_batch_processor, \
-         patch("src.pipeline.orchestrator.mark_old_files_as_outdated", new_callable=AsyncMock) as mock_mark_old_files, \
-         patch("src.pipeline.orchestrator.update_manifest", new_callable=AsyncMock) as mock_update_manifest, \
-         patch("src.pipeline.orchestrator.tag_files_as_final", new_callable=AsyncMock) as mock_tag_files, \
-         patch("src.pipeline.orchestrator.invalidate_cloudfront_cache", new_callable=AsyncMock) as mock_invalidate_cache, \
-         patch("src.pipeline.orchestrator.EXECUTION_ORDER", ["games"]):
-
+    with (
+        patch("src.pipeline.orchestrator.BatchProcessor") as mock_batch_processor,
+        patch(
+            "src.pipeline.orchestrator.mark_old_files_as_outdated",
+            new_callable=AsyncMock,
+        ) as mock_mark_old_files,
+        patch(
+            "src.pipeline.orchestrator.update_manifest", new_callable=AsyncMock
+        ) as mock_update_manifest,
+        patch(
+            "src.pipeline.orchestrator.tag_files_as_final", new_callable=AsyncMock
+        ) as mock_tag_files,
+        patch(
+            "src.pipeline.orchestrator.invalidate_cloudfront_cache",
+            new_callable=AsyncMock,
+        ) as mock_invalidate_cache,
+        patch("src.pipeline.orchestrator.EXECUTION_ORDER", ["games"]),
+    ):
         mock_bp_instance = mock_batch_processor.return_value
         mock_bp_instance.process = AsyncMock(return_value=mock_batch_results)
 
@@ -69,6 +80,7 @@ async def test_orchestrator_run_full_refresh(
         assert results[0].record_count == 200
         assert results[0].mode == "full"
 
+
 async def test_orchestrator_run_incremental_no_data(
     mock_dependencies: dict[str, AsyncMock],
     mock_extractors: dict[str, AsyncMock],
@@ -88,14 +100,24 @@ async def test_orchestrator_run_incremental_no_data(
     )
 
     last_run_time = datetime(2025, 1, 1)
-    mock_dependencies["state_manager"].get_last_run_time = AsyncMock(return_value=last_run_time)
+    mock_dependencies["state_manager"].get_last_run_time = AsyncMock(
+        return_value=last_run_time
+    )
 
-    with patch("src.pipeline.orchestrator.BatchProcessor") as mock_batch_processor, \
-         patch("src.pipeline.orchestrator.mark_old_files_as_outdated", new_callable=AsyncMock) as mock_mark_old_files, \
-         patch("src.pipeline.orchestrator.update_manifest", new_callable=AsyncMock) as mock_update_manifest, \
-         patch("src.pipeline.orchestrator.tag_files_as_final", new_callable=AsyncMock) as mock_tag_files, \
-         patch("src.pipeline.orchestrator.EXECUTION_ORDER", ["games"]):
-
+    with (
+        patch("src.pipeline.orchestrator.BatchProcessor") as mock_batch_processor,
+        patch(
+            "src.pipeline.orchestrator.mark_old_files_as_outdated",
+            new_callable=AsyncMock,
+        ) as mock_mark_old_files,
+        patch(
+            "src.pipeline.orchestrator.update_manifest", new_callable=AsyncMock
+        ) as mock_update_manifest,
+        patch(
+            "src.pipeline.orchestrator.tag_files_as_final", new_callable=AsyncMock
+        ) as mock_tag_files,
+        patch("src.pipeline.orchestrator.EXECUTION_ORDER", ["games"]),
+    ):
         mock_bp_instance = mock_batch_processor.return_value
         mock_bp_instance.process = AsyncMock(return_value=mock_batch_results)
 

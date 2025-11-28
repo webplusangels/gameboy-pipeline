@@ -12,7 +12,9 @@ class Extractor(ABC):
     """
 
     @abstractmethod
-    async def extract(self, last_updated_at: datetime | None) -> AsyncGenerator[dict[str, Any], None]:
+    async def extract(
+        self, last_updated_at: datetime | None
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         외부 소스로부터 데이터를 추출합니다.
 

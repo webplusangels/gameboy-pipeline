@@ -3,14 +3,17 @@ import pytest
 from src.pipeline.utils import get_s3_path
 
 
-@pytest.mark.parametrize("entity_name,expected_prefix", [
-    ("platforms", "raw/dimensions/platforms"),
-    ("genres", "raw/dimensions/genres"),
-    ("game_modes", "raw/dimensions/game_modes"),
-    ("themes", "raw/dimensions/themes"),
-    ("player_perspectives", "raw/dimensions/player_perspectives"),
-    ("games", "raw/games/dt=2023-10-01"),
-])
+@pytest.mark.parametrize(
+    "entity_name,expected_prefix",
+    [
+        ("platforms", "raw/dimensions/platforms"),
+        ("genres", "raw/dimensions/genres"),
+        ("game_modes", "raw/dimensions/game_modes"),
+        ("themes", "raw/dimensions/themes"),
+        ("player_perspectives", "raw/dimensions/player_perspectives"),
+        ("games", "raw/games/dt=2023-10-01"),
+    ],
+)
 def test_get_s3_path_entities_return_dimension_path(
     entity_name: str, expected_prefix: str
 ) -> None:
@@ -20,6 +23,7 @@ def test_get_s3_path_entities_return_dimension_path(
     dt_partition = "2023-10-01"
     s3_path = get_s3_path(entity_name, dt_partition)
     assert s3_path == expected_prefix
+
 
 def test_get_s3_path_unknown_entity() -> None:
     """

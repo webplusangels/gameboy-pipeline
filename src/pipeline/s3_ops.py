@@ -21,12 +21,7 @@ async def create_clients() -> AsyncGenerator[tuple[httpx.AsyncClient, Any, Any],
     logger.info("HTTPX AsyncClient 세션 생성...")
     region = settings.aws_default_region
     session = aioboto3.Session(region_name=region)
-    timeout = httpx.Timeout(
-        connect=10.0,
-        read=60.0,
-        write=10.0,
-        pool=10.0
-    )
+    timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
 
     async with (
         httpx.AsyncClient(timeout=timeout) as http_client,
@@ -37,6 +32,7 @@ async def create_clients() -> AsyncGenerator[tuple[httpx.AsyncClient, Any, Any],
             yield http_client, s3_client, cloudfront_client
         finally:
             logger.info("클라이언트 세션 종료...")
+
 
 async def mark_old_files_as_outdated(
     s3_client: Any,
@@ -56,7 +52,9 @@ async def mark_old_files_as_outdated(
     else:
         s3_prefix = f"raw/{entity_name}/"
 
-    logger.info(f"'{entity_name}' 엔티티의 기존 파일들을 'outdated'로 태그 변경 시작...")
+    logger.info(
+        f"'{entity_name}' 엔티티의 기존 파일들을 'outdated'로 태그 변경 시작..."
+    )
 
     tagged_count = 0
     paginator = s3_client.get_paginator("list_objects_v2")
@@ -88,20 +86,23 @@ async def mark_old_files_as_outdated(
                     await s3_client.put_object_tagging(
                         Bucket=bucket_name,
                         Key=key,
-                        Tagging={
-                            "TagSet": [{"Key": "status", "Value": "outdated"}]
-                        },
+                        Tagging={"TagSet": [{"Key": "status", "Value": "outdated"}]},
                     )
                     tagged_count += 1
 
             except Exception as e:
-                logger.error(f"파일 태그 업데이트 실패: s3://{bucket_name}/{key} - 오류: {e}")
+                logger.error(
+                    f"파일 태그 업데이트 실패: s3://{bucket_name}/{key} - 오류: {e}"
+                )
                 failed_files.append(key)
                 continue
 
     if failed_files:
         logger.warning(f"태그 업데이트에 실패한 파일들: {len(failed_files)}개")
-    logger.info(f"'{entity_name}' 엔티티의 기존 파일들을 'outdated'로 태그 변경 완료. 총 {tagged_count}개 파일이 업데이트되었습니다.")
+    logger.info(
+        f"'{entity_name}' 엔티티의 기존 파일들을 'outdated'로 태그 변경 완료. 총 {tagged_count}개 파일이 업데이트되었습니다."
+    )
+
 
 async def tag_files_as_final(
     s3_client: Any,
@@ -127,17 +128,20 @@ async def tag_files_as_final(
             await s3_client.put_object_tagging(
                 Bucket=bucket_name,
                 Key=key,
-                Tagging={
-                    "TagSet": [{"Key": "status", "Value": "final"}]
-                },
+                Tagging={"TagSet": [{"Key": "status", "Value": "final"}]},
             )
             tagged_count += 1
 
         except Exception as e:
-            logger.error(f"파일 태그 업데이트 실패: s3://{bucket_name}/{key} - 오류: {e}")
+            logger.error(
+                f"파일 태그 업데이트 실패: s3://{bucket_name}/{key} - 오류: {e}"
+            )
             continue
 
-    logger.info(f"'{entity_name}' 엔티티의 새 파일들을 'final'로 태그 변경 완료. 총 {tagged_count}개 파일이 업데이트되었습니다.")
+    logger.info(
+        f"'{entity_name}' 엔티티의 새 파일들을 'final'로 태그 변경 완료. 총 {tagged_count}개 파일이 업데이트되었습니다."
+    )
+
 
 async def invalidate_cloudfront_cache(
     cloudfront_client: Any,
@@ -148,22 +152,28 @@ async def invalidate_cloudfront_cache(
         logger.info("CloudFront 캐시 무효화 시작...")
         try:
             fact_manifest_path = f"/raw/games/dt={dt_partition}/_manifest.json"
-            dim_manifest_path = [f"/raw/dimensions/{entity}/_manifest.json" for entity in DIMENSION_ENTITIES]
+            dim_manifest_path = [
+                f"/raw/dimensions/{entity}/_manifest.json"
+                for entity in DIMENSION_ENTITIES
+            ]
             invalidation_path = [fact_manifest_path] + dim_manifest_path
 
             await cloudfront_client.create_invalidation(
                 DistributionId=cloudfront_distribution_id,
                 InvalidationBatch={
-                    'Paths': {
-                        'Quantity': len(invalidation_path),
-                        'Items': invalidation_path
+                    "Paths": {
+                        "Quantity": len(invalidation_path),
+                        "Items": invalidation_path,
                     },
-                    'CallerReference': str(uuid.uuid4())
-                }
+                    "CallerReference": str(uuid.uuid4()),
+                },
             )
-            logger.success(f"CloudFront 캐시 무효화 요청 완료: {len(invalidation_path)}개 경로")
+            logger.success(
+                f"CloudFront 캐시 무효화 요청 완료: {len(invalidation_path)}개 경로"
+            )
         except Exception as e:
             logger.error(f"CloudFront 캐시 무효화 중 오류 발생: {e}")
     else:
-        logger.warning("CloudFront Distribution ID가 설정되지 않아 캐시 무효화를 건너뜁니다.")
-
+        logger.warning(
+            "CloudFront Distribution ID가 설정되지 않아 캐시 무효화를 건너뜁니다."
+        )

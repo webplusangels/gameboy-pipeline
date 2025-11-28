@@ -51,9 +51,11 @@ def mock_client(mocker) -> AsyncMock:
     mock.post.return_value = mock_response
     return mock
 
+
 @pytest.fixture
 def mock_s3_client(mocker) -> AsyncMock:
     """boto3 S3 클라이언트의 기본 Mock"""
+
     class NoSuchKeyError(Exception):
         pass
 
@@ -64,11 +66,13 @@ def mock_s3_client(mocker) -> AsyncMock:
     mock.get_paginator = mocker.MagicMock()
     return mock
 
+
 @pytest.fixture
 def mock_cloudfront_client(mocker) -> AsyncMock:
     """boto3 CloudFront 클라이언트의 기본 Mock"""
     mock = mocker.AsyncMock()
     return mock
+
 
 @pytest.fixture
 def mock_loader(mocker) -> AsyncMock:
@@ -76,12 +80,14 @@ def mock_loader(mocker) -> AsyncMock:
     mock = mocker.AsyncMock()
     return mock
 
+
 @pytest.fixture
 def mock_extractor(mocker) -> AsyncMock:
     """Extractor 인터페이스의 기본 Mock"""
     mock = mocker.AsyncMock(spec=Extractor)
     mock.extract = mocker.MagicMock()
     return mock
+
 
 @pytest.fixture
 def mock_dependencies(mocker) -> dict[str, AsyncMock]:
@@ -93,6 +99,7 @@ def mock_dependencies(mocker) -> dict[str, AsyncMock]:
         "state_manager": mocker.AsyncMock(),
         "bucket_name": "test-bucket",
     }
+
 
 @pytest.fixture
 def mock_extractors(mocker) -> dict[str, AsyncMock]:

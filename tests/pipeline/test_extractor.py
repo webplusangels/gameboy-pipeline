@@ -153,6 +153,7 @@ async def test_igdb_extractor_handles_pagination_empty_first_page(
     # 2. API 호출 횟수 검증
     assert mock_client.post.call_count == 1
 
+
 @pytest.mark.asyncio
 async def test_igdb_extractor_query_configuration(
     mock_client: AsyncMock, mock_auth_provider: AuthProvider

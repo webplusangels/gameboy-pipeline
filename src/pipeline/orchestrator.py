@@ -22,17 +22,19 @@ class PipelineResult:
     """
     파이프라인 실행 결과를 나타내는 데이터 클래스입니다.
     """
+
     entity_name: str
     record_count: int
     file_count: int
     elapsed_seconds: float
-    mode: str # 'full' 또는 'incremental'
+    mode: str  # 'full' 또는 'incremental'
 
 
 class PipelineOrchestrator:
     """
     데이터 파이프라인의 오케스트레이션을 담당하는 클래스입니다.
     """
+
     def __init__(
         self,
         s3_client: Any,
@@ -68,7 +70,9 @@ class PipelineOrchestrator:
             list[PipelineResult]: 각 엔티티에 대한 파이프라인 실행 결과 목록
         """
         dt_partition = target_date or datetime.now(UTC).strftime("%Y-%m-%d")
-        logger.info(f"파이프라인 실행 시작 - 날짜 파티션: {dt_partition}, 전체 갱신: {full_refresh}")
+        logger.info(
+            f"파이프라인 실행 시작 - 날짜 파티션: {dt_partition}, 전체 갱신: {full_refresh}"
+        )
 
         results: list[PipelineResult] = []
 
@@ -210,6 +214,8 @@ class PipelineOrchestrator:
                 f"마지막 실행 시간: {last_run_time.isoformat()}"
             )
         else:
-            logger.info(f"엔티티 '{entity_name}' 전체 로드 모드로 실행 (이전 실행 기록 없음)")
+            logger.info(
+                f"엔티티 '{entity_name}' 전체 로드 모드로 실행 (이전 실행 기록 없음)"
+            )
 
         return last_run_time

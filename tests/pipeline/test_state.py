@@ -65,9 +65,7 @@ async def test_s3_state_manager_get_last_run_time_not_exists(mock_client):
 
 
 @pytest.mark.asyncio
-async def test_s3_state_manager_get_last_run_time_entity_not_in_state(
-    mock_client
-):
+async def test_s3_state_manager_get_last_run_time_entity_not_in_state(mock_client):
     """
     [GREEN]
     상태 파일은 있지만 'last_run_time' 키가 없을 때 None 반환 테스트
@@ -276,6 +274,7 @@ async def test_s3_state_manager_list_states(mock_client):
     assert result["games"].isoformat() == "2025-11-10T10:00:00+00:00"
     assert result["platforms"].isoformat() == "2025-11-09T15:30:00+00:00"
 
+
 @pytest.mark.asyncio
 async def test_s3_state_manager_client_error_handling(mock_client):
     """
@@ -283,7 +282,9 @@ async def test_s3_state_manager_client_error_handling(mock_client):
     """
     mock_s3_client = mock_client
     mock_s3_client.get_object = AsyncMock(
-        side_effect=ClientError({"Error": {"Code": "500", "Message": "InternalError"}}, "GetObject")
+        side_effect=ClientError(
+            {"Error": {"Code": "500", "Message": "InternalError"}}, "GetObject"
+        )
     )
 
     state_manager = S3StateManager(
@@ -295,6 +296,7 @@ async def test_s3_state_manager_client_error_handling(mock_client):
 
     assert exc_info.value.response["Error"]["Code"] == "500"
     assert exc_info.value.response["Error"]["Message"] == "InternalError"
+
 
 @pytest.mark.asyncio
 async def test_s3_state_manager_exception_handling(mock_client):
@@ -313,6 +315,7 @@ async def test_s3_state_manager_exception_handling(mock_client):
     result = await state_manager.get_last_run_time("games")
     assert result is None
 
+
 @pytest.mark.asyncio
 async def test_s3_state_manager_save_last_run_time_client_error_handling(mock_client):
     """
@@ -321,14 +324,11 @@ async def test_s3_state_manager_save_last_run_time_client_error_handling(mock_cl
     mock_s3_client = mock_client
     mock_s3_client.get_object = AsyncMock(
         side_effect=ClientError(
-            {"Error": {"Code": "AccessDenied", "Message": "Access Denied"}},
-            "GetObject"
+            {"Error": {"Code": "AccessDenied", "Message": "Access Denied"}}, "GetObject"
         )
     )
 
-    state_manager = S3StateManager(
-        client=mock_s3_client, bucket_name="test-bucket"
-    )
+    state_manager = S3StateManager(client=mock_s3_client, bucket_name="test-bucket")
 
     with pytest.raises(ClientError) as exc_info:
         await state_manager.save_last_run_time("games", datetime.now(UTC))
@@ -336,6 +336,7 @@ async def test_s3_state_manager_save_last_run_time_client_error_handling(mock_cl
     assert exc_info.value.response["Error"]["Code"] == "AccessDenied"
     # put_object이 호출되지 않았는지 확인
     mock_s3_client.put_object.assert_not_called()
+
 
 @pytest.mark.asyncio
 async def test_s3_state_manager_save_last_run_time_put_object_failure(mock_client):
@@ -346,27 +347,23 @@ async def test_s3_state_manager_save_last_run_time_put_object_failure(mock_clien
     """
     mock_s3_client = mock_client
     mock_s3_client.get_object = AsyncMock(
-        side_effect=ClientError(
-            {"Error": {"Code": "NoSuchKey"}},
-            "GetObject"
-        )
+        side_effect=ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
     )
 
     mock_s3_client.put_object = AsyncMock(
         side_effect=ClientError(
             {"Error": {"Code": "InternalError", "Message": "Internal Server Error"}},
-            "PutObject"
+            "PutObject",
         )
     )
 
-    state_manager = S3StateManager(
-        client=mock_s3_client, bucket_name="test-bucket"
-    )
+    state_manager = S3StateManager(client=mock_s3_client, bucket_name="test-bucket")
 
     with pytest.raises(ClientError) as exc_info:
         await state_manager.save_last_run_time("games", datetime.now(UTC))
 
     assert exc_info.value.response["Error"]["Code"] == "InternalError"
+
 
 @pytest.mark.asyncio
 async def test_s3_state_manager_reset_state_failure(mock_client):
@@ -377,13 +374,11 @@ async def test_s3_state_manager_reset_state_failure(mock_client):
     mock_s3_client.delete_object = AsyncMock(
         side_effect=ClientError(
             {"Error": {"Code": "AccessDenied", "Message": "Access Denied"}},
-            "DeleteObject"
+            "DeleteObject",
         )
     )
 
-    state_manager = S3StateManager(
-        client=mock_s3_client, bucket_name="test-bucket"
-    )
+    state_manager = S3StateManager(client=mock_s3_client, bucket_name="test-bucket")
 
     with pytest.raises(ClientError) as exc_info:
         await state_manager.reset_state("games")

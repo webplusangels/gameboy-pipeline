@@ -41,8 +41,10 @@ async def test_create_clients_initialization_and_teardown():
 
     mock_session_instance.client.side_effect = client_side_effect
 
-    with patch("src.pipeline.s3_ops.aioboto3.Session", mock_session_cls), \
-         patch("src.pipeline.s3_ops.httpx.AsyncClient") as mock_httpx_cls:
+    with (
+        patch("src.pipeline.s3_ops.aioboto3.Session", mock_session_cls),
+        patch("src.pipeline.s3_ops.httpx.AsyncClient") as mock_httpx_cls,
+    ):
         # Act
         mock_httpx_instance = AsyncMock(name="mock_httpx_client")
         mock_httpx_cls.return_value = mock_httpx_instance
@@ -62,6 +64,7 @@ async def test_create_clients_initialization_and_teardown():
         mock_httpx_instance.__aexit__.assert_called_once()
         mock_s3_context.__aexit__.assert_called_once()
         mock_cloudfront_context.__aexit__.assert_called_once()
+
 
 @pytest.mark.asyncio
 async def test_mark_old_files_tags_final_files_as_outdated(
@@ -102,6 +105,7 @@ async def test_mark_old_files_tags_final_files_as_outdated(
     assert mock_s3_client.get_paginator.called
     assert mock_s3_client.put_object_tagging.call_count == 2  # final 파일 2개 변경
 
+
 @pytest.mark.asyncio
 async def test_mark_old_files_dimension_entity_no_contents(
     mock_s3_client: AsyncMock,
@@ -129,6 +133,7 @@ async def test_mark_old_files_dimension_entity_no_contents(
 
     assert mock_s3_client.get_paginator.called
     assert mock_s3_client.put_object_tagging.call_count == 0  # 변경된 파일 없음
+
 
 @pytest.mark.asyncio
 async def test_mark_old_files_tagging_failure(
@@ -174,6 +179,7 @@ async def test_mark_old_files_tagging_failure(
     assert mock_s3_client.get_paginator.called
     assert mock_s3_client.put_object_tagging.call_count == 2  # 두 파일 모두 시도
 
+
 @pytest.mark.asyncio
 async def test_tag_files_as_final(
     mock_s3_client: AsyncMock,
@@ -212,6 +218,7 @@ async def test_tag_files_as_final(
     ]
     mock_s3_client.put_object_tagging.assert_has_calls(expected_calls, any_order=True)
 
+
 @pytest.mark.asyncio
 async def test_tag_files_as_final_tagging_failure(
     mock_s3_client: AsyncMock,
@@ -244,6 +251,7 @@ async def test_tag_files_as_final_tagging_failure(
 
     assert mock_s3_client.put_object_tagging.call_count == 2  # 두 파일 모두 시도
 
+
 @pytest.mark.asyncio
 async def test_invalidate_cloudfront_cache(
     mock_cloudfront_client: AsyncMock,
@@ -267,7 +275,10 @@ async def test_invalidate_cloudfront_cache(
 
     assert kwargs["DistributionId"] == distribution_id
     invalidation_paths = kwargs["InvalidationBatch"]["Paths"]["Items"]
-    assert any("/raw/games/dt=2025-01-01/_manifest.json" in path for path in invalidation_paths)
+    assert any(
+        "/raw/games/dt=2025-01-01/_manifest.json" in path for path in invalidation_paths
+    )
+
 
 @pytest.mark.asyncio
 async def test_invalidate_cloudfront_cache_no_distribution_id(
@@ -287,6 +298,7 @@ async def test_invalidate_cloudfront_cache_no_distribution_id(
 
     mock_cloudfront_client.create_invalidation.assert_not_called()
 
+
 @pytest.mark.asyncio
 async def test_invalidate_cloudfront_cache_failure(
     mock_cloudfront_client: AsyncMock,
@@ -297,7 +309,9 @@ async def test_invalidate_cloudfront_cache_failure(
     Verifies:
         1. 예외가 발생해도 함수가 정상 종료되는지
     """
-    mock_cloudfront_client.create_invalidation.side_effect = Exception("CloudFront Error")
+    mock_cloudfront_client.create_invalidation.side_effect = Exception(
+        "CloudFront Error"
+    )
 
     await invalidate_cloudfront_cache(
         cloudfront_client=mock_cloudfront_client,

@@ -41,6 +41,7 @@ async def test_update_manifest_full_refresh(
     assert body["files"] == ["file1.jsonl", "file2.jsonl"]
     assert body["total_count"] == 200
 
+
 @pytest.mark.asyncio
 async def test_update_manifest_incremental_appends_to_existing(
     mock_s3_client: AsyncMock,
@@ -83,7 +84,8 @@ async def test_update_manifest_incremental_appends_to_existing(
     body = json.loads(call_args.kwargs["Body"].decode("utf-8"))
 
     assert body["files"] == ["old_file1.jsonl", "new_file1.jsonl"]
-    assert body["total_count"] == 150 # 100 + 50
+    assert body["total_count"] == 150  # 100 + 50
+
 
 @pytest.mark.asyncio
 async def test_update_manifest_no_existing_file_creates_new(

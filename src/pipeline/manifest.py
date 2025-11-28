@@ -14,6 +14,7 @@ class Manifest(TypedDict, total=False):
     updated_at: str
     batch_count: int
 
+
 async def update_manifest(
     s3_client: Any,
     bucket_name: str,
@@ -41,7 +42,9 @@ async def update_manifest(
     manifest_key = f"{s3_prefix}/_manifest.json"
 
     if full_refresh:
-        logger.info(f"Full Refresh 모드: 기존 매니페스트 파일을 초기화합니다: {manifest_key}")
+        logger.info(
+            f"Full Refresh 모드: 기존 매니페스트 파일을 초기화합니다: {manifest_key}"
+        )
         manifest_data: Manifest = {
             "files": new_files,
             "total_count": new_count,
@@ -76,4 +79,6 @@ async def update_manifest(
         Body=json.dumps(manifest_data, indent=2).encode("utf-8"),
         ContentType="application/json",
     )
-    logger.info(f"매니페스트 파일 {'교체' if full_refresh else '업데이트'} 완료: {manifest_key} (총 {len(manifest_data['files'])}개 파일)")
+    logger.info(
+        f"매니페스트 파일 {'교체' if full_refresh else '업데이트'} 완료: {manifest_key} (총 {len(manifest_data['files'])}개 파일)"
+    )
