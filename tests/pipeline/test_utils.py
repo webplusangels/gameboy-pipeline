@@ -1,5 +1,7 @@
 import pytest
+
 from src.pipeline.utils import get_s3_path
+
 
 @pytest.mark.parametrize("entity_name,expected_prefix", [
     ("platforms", "raw/dimensions/platforms"),

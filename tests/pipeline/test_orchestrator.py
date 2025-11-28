@@ -1,6 +1,7 @@
-from unittest.mock import AsyncMock, patch
-import pytest
 from datetime import datetime
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from src.pipeline.batch_processor import BatchResult
 from src.pipeline.orchestrator import PipelineOrchestrator
@@ -28,14 +29,14 @@ async def test_orchestrator_run_full_refresh(
         batch_count=2,
     )
 
-    with patch("src.pipeline.orchestrator.BatchProcessor") as MockBatchProcessor, \
+    with patch("src.pipeline.orchestrator.BatchProcessor") as mock_batch_processor, \
          patch("src.pipeline.orchestrator.mark_old_files_as_outdated", new_callable=AsyncMock) as mock_mark_old_files, \
          patch("src.pipeline.orchestrator.update_manifest", new_callable=AsyncMock) as mock_update_manifest, \
          patch("src.pipeline.orchestrator.tag_files_as_final", new_callable=AsyncMock) as mock_tag_files, \
          patch("src.pipeline.orchestrator.invalidate_cloudfront_cache", new_callable=AsyncMock) as mock_invalidate_cache, \
          patch("src.pipeline.orchestrator.EXECUTION_ORDER", ["games"]):
 
-        mock_bp_instance = MockBatchProcessor.return_value
+        mock_bp_instance = mock_batch_processor.return_value
         mock_bp_instance.process = AsyncMock(return_value=mock_batch_results)
 
         orchestrator = PipelineOrchestrator(
@@ -85,18 +86,17 @@ async def test_orchestrator_run_incremental_no_data(
         total_count=0,
         batch_count=0,
     )
-    
+
     last_run_time = datetime(2025, 1, 1)
     mock_dependencies["state_manager"].get_last_run_time = AsyncMock(return_value=last_run_time)
 
-    with patch("src.pipeline.orchestrator.BatchProcessor") as MockBatchProcessor, \
+    with patch("src.pipeline.orchestrator.BatchProcessor") as mock_batch_processor, \
          patch("src.pipeline.orchestrator.mark_old_files_as_outdated", new_callable=AsyncMock) as mock_mark_old_files, \
          patch("src.pipeline.orchestrator.update_manifest", new_callable=AsyncMock) as mock_update_manifest, \
          patch("src.pipeline.orchestrator.tag_files_as_final", new_callable=AsyncMock) as mock_tag_files, \
-         patch("src.pipeline.orchestrator.invalidate_cloudfront_cache", new_callable=AsyncMock) as mock_invalidate_cache, \
          patch("src.pipeline.orchestrator.EXECUTION_ORDER", ["games"]):
 
-        mock_bp_instance = MockBatchProcessor.return_value
+        mock_bp_instance = mock_batch_processor.return_value
         mock_bp_instance.process = AsyncMock(return_value=mock_batch_results)
 
         orchestrator = PipelineOrchestrator(

@@ -54,12 +54,12 @@ def mock_client(mocker) -> AsyncMock:
 @pytest.fixture
 def mock_s3_client(mocker) -> AsyncMock:
     """boto3 S3 클라이언트의 기본 Mock"""
-    class NoSuchKey(Exception):
+    class NoSuchKeyError(Exception):
         pass
 
     mock = mocker.AsyncMock()
     mock.exceptions = mocker.MagicMock()
-    mock.exceptions.NoSuchKey = NoSuchKey
+    mock.exceptions.NoSuchKey = NoSuchKeyError
 
     mock.get_paginator = mocker.MagicMock()
     return mock

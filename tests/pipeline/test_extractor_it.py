@@ -8,7 +8,6 @@ from src.config import settings
 from src.pipeline.auth import StaticAuthProvider
 from src.pipeline.extractors import IgdbExtractor
 
-
 pytestmark = pytest.mark.integration
 
 

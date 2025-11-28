@@ -1,5 +1,6 @@
 from src.pipeline.constants import DIMENSION_ENTITIES
 
+
 def get_s3_path(entity_name: str, dt_partition: str) -> str:
     """
     엔티티 타입에 따라 S3 경로를 반환합니다.

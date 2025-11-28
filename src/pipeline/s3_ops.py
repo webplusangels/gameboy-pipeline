@@ -1,13 +1,15 @@
-from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
 import uuid
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from typing import Any
 
+import aioboto3
 import httpx
 from loguru import logger
-import aioboto3
 
-from src.pipeline.constants import DIMENSION_ENTITIES
 from src.config import settings
+from src.pipeline.constants import DIMENSION_ENTITIES
+
 
 @asynccontextmanager
 async def create_clients() -> AsyncGenerator[tuple[httpx.AsyncClient, Any, Any], None]:
@@ -69,7 +71,7 @@ async def mark_old_files_as_outdated(
 
             if key.endswith("_manifest.json") or key.endswith("/"):
                 continue  # 매니페스트 파일과 폴더는 건너뜁니다.
-                
+
             try:
                 response = await s3_client.get_object_tagging(
                     Bucket=bucket_name,
@@ -96,7 +98,7 @@ async def mark_old_files_as_outdated(
                 logger.error(f"파일 태그 업데이트 실패: s3://{bucket_name}/{key} - 오류: {e}")
                 failed_files.append(key)
                 continue
-    
+
     if failed_files:
         logger.warning(f"태그 업데이트에 실패한 파일들: {len(failed_files)}개")
     logger.info(f"'{entity_name}' 엔티티의 기존 파일들을 'outdated'로 태그 변경 완료. 총 {tagged_count}개 파일이 업데이트되었습니다.")
@@ -164,4 +166,4 @@ async def invalidate_cloudfront_cache(
             logger.error(f"CloudFront 캐시 무효화 중 오류 발생: {e}")
     else:
         logger.warning("CloudFront Distribution ID가 설정되지 않아 캐시 무효화를 건너뜁니다.")
-    
+

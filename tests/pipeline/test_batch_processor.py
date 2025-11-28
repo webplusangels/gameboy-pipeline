@@ -1,7 +1,9 @@
 from unittest.mock import AsyncMock
+
 import pytest
 
 from src.pipeline.batch_processor import BatchProcessor
+
 
 @pytest.mark.asyncio
 async def test_batch_processor_chunks_data_correctly(

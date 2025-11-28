@@ -1,7 +1,7 @@
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from datetime import UTC, datetime, timedelta
 
 from src.pipeline.extractors import BaseIgdbExtractor, IgdbExtractor
 from src.pipeline.interfaces import AuthProvider, Extractor

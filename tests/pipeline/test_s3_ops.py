@@ -1,13 +1,20 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
-from src.pipeline.s3_ops import create_clients, invalidate_cloudfront_cache, mark_old_files_as_outdated, tag_files_as_final
+import pytest
+
+from src.pipeline.s3_ops import (
+    create_clients,
+    invalidate_cloudfront_cache,
+    mark_old_files_as_outdated,
+    tag_files_as_final,
+)
+
 
 @pytest.mark.asyncio
 async def test_create_clients_initialization_and_teardown():
     """
     S3 및 CloudFront 클라이언트 생성과 종료가 올바르게 수행되는지 테스트합니다.
-    
+
     Verifies:
         1. S3 및 CloudFront 클라이언트가 올바르게 생성되는지
         2. 클라이언트 종료 메서드가 호출되는지
@@ -31,7 +38,7 @@ async def test_create_clients_initialization_and_teardown():
         elif service_name == "cloudfront":
             return mock_cloudfront_context
         return AsyncMock()
-    
+
     mock_session_instance.client.side_effect = client_side_effect
 
     with patch("src.pipeline.s3_ops.aioboto3.Session", mock_session_cls), \
@@ -51,7 +58,7 @@ async def test_create_clients_initialization_and_teardown():
             call_kwargs = mock_httpx_cls.call_args.kwargs
             assert "timeout" in call_kwargs
             assert call_kwargs["timeout"].connect == 10.0
-        
+
         mock_httpx_instance.__aexit__.assert_called_once()
         mock_s3_context.__aexit__.assert_called_once()
         mock_cloudfront_context.__aexit__.assert_called_once()
@@ -190,7 +197,7 @@ async def test_tag_files_as_final(
     )
 
     assert mock_s3_client.put_object_tagging.call_count == 2
-    
+
     expected_calls = [
         call(
             Bucket="test-bucket",
@@ -204,7 +211,7 @@ async def test_tag_files_as_final(
         ),
     ]
     mock_s3_client.put_object_tagging.assert_has_calls(expected_calls, any_order=True)
-    
+
 @pytest.mark.asyncio
 async def test_tag_files_as_final_tagging_failure(
     mock_s3_client: AsyncMock,
@@ -248,7 +255,6 @@ async def test_invalidate_cloudfront_cache(
         1. S3 클라이언트의 create_invalidation 메서드가 올바르게 호출되는지
     """
     distribution_id = "TEST_DISTRIBUTION_ID"
-    paths = ["/raw/games/file1.jsonl", "/raw/games/file2.jsonl"]
 
     await invalidate_cloudfront_cache(
         cloudfront_client=mock_cloudfront_client,
@@ -292,7 +298,7 @@ async def test_invalidate_cloudfront_cache_failure(
         1. 예외가 발생해도 함수가 정상 종료되는지
     """
     mock_cloudfront_client.create_invalidation.side_effect = Exception("CloudFront Error")
-    
+
     await invalidate_cloudfront_cache(
         cloudfront_client=mock_cloudfront_client,
         cloudfront_distribution_id="TEST_DISTRIBUTION_ID",

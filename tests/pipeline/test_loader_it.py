@@ -5,7 +5,6 @@ import pytest
 from src.config import settings
 from src.pipeline.loaders import S3Loader
 
-
 pytestmark = pytest.mark.integration
 
 

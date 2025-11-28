@@ -1,9 +1,11 @@
+import json
 from datetime import datetime
 from typing import Any, TypedDict
 
-from src.pipeline.utils import get_s3_path
 from loguru import logger
-import json
+
+from src.pipeline.utils import get_s3_path
+
 
 class Manifest(TypedDict, total=False):
     files: list[str]

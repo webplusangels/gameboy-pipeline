@@ -1,8 +1,11 @@
-from datetime import datetime, UTC
 import json
-import pytest
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
+
+import pytest
+
 from src.pipeline.manifest import update_manifest
+
 
 @pytest.mark.asyncio
 async def test_update_manifest_full_refresh(

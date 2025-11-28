@@ -2,7 +2,6 @@ import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
-from more_itertools import side_effect
 import pytest
 from botocore.exceptions import ClientError
 
@@ -381,12 +380,12 @@ async def test_s3_state_manager_reset_state_failure(mock_client):
             "DeleteObject"
         )
     )
-    
+
     state_manager = S3StateManager(
         client=mock_s3_client, bucket_name="test-bucket"
     )
-    
+
     with pytest.raises(ClientError) as exc_info:
         await state_manager.reset_state("games")
-    
+
     assert exc_info.value.response["Error"]["Code"] == "AccessDenied"
