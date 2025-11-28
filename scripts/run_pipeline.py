@@ -37,7 +37,7 @@ async def main(full_refresh: bool = False, target_date: str | None = None) -> No
     logger.info("=== 데이터 레이크 적재 파이프라인 시작 ===")
 
     client_id = settings.igdb_client_id
-    static_token = settings.igdb_client_secret
+    static_token = settings.igdb_static_token
     bucket_name = settings.s3_bucket_name
 
     if not all([client_id, static_token, bucket_name]):
