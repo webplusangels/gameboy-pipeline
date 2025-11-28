@@ -1,357 +1,24 @@
 import argparse
 import asyncio
-import json
-import os
 import sys
-import time
-import uuid
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
-from typing import Any
-from datetime import datetime, timezone
-import aioboto3
-import httpx
-from dotenv import load_dotenv
+
 from loguru import logger
 
+from src.config import settings
 from src.pipeline.auth import StaticAuthProvider
-from src.pipeline.extractors import (
-    IgdbExtractor,
-    IgdbGameModeExtractor,
-    IgdbGenreExtractor,
-    IgdbPlatformExtractor,
-    IgdbPlayerPerspectiveExtractor,
-    IgdbThemeExtractor,
-)
-from src.pipeline.interfaces import Extractor, Loader, StateManager
 from src.pipeline.loaders import S3Loader
+from src.pipeline.orchestrator import PipelineOrchestrator
+from src.pipeline.registry import ALL_ENTITIES
+from src.pipeline.s3_ops import create_clients
 from src.pipeline.state import S3StateManager
 
-load_dotenv()
-BATCH_SIZE = 50000
 
-# 실행 순서 정의 (차원 데이터 먼저, 팩트 데이터 나중에)
-EXECUTION_ORDER = [
-    "platforms",
-    "genres",
-    "game_modes",
-    "themes",
-    "player_perspectives",
-    "games",  # 마지막
-]
-
-ALL_ENTITIES = {
-    "games": IgdbExtractor,
-    "platforms": IgdbPlatformExtractor,
-    "genres": IgdbGenreExtractor,
-    "game_modes": IgdbGameModeExtractor,
-    "player_perspectives": IgdbPlayerPerspectiveExtractor,
-    "themes": IgdbThemeExtractor,
-}
-
-DIMENSION_ENTITIES = {
-    "platforms",
-    "genres",
-    "game_modes",
-    "themes",
-    "player_perspectives",
-}
-
-FACT_ENTITIES = {
-    "games",
-}
-
-def get_s3_path(entity_name: str, dt_partition: str) -> str:
-    """엔티티 타입에 따라 S3 경로를 반환합니다."""
-    if entity_name in DIMENSION_ENTITIES:
-        return f"raw/dimensions/{entity_name}"
-    else:
-        return f"raw/{entity_name}/dt={dt_partition}"
-
-async def mark_old_files_as_outdated(
-    s3_client: Any,
-    bucket_name: str,
-    entity_name: str,
-) -> int:
+def setup_logging() -> None:
     """
-    Full Refresh 시 기존 파일들의 태그를 'status=outdated'로 변경합니다.
-
-    Returns:
-        int: 변경된 파일 수
-    """
-    if entity_name in DIMENSION_ENTITIES:
-        prefix = f"raw/dimensions/{entity_name}/"
-    else:
-        prefix = f"raw/{entity_name}/"
-    
-    logger.info(f"'{entity_name}' 기존 파일들을 'status=outdated'로 태그 변경 중...")
-
-    tagged_count = 0
-    paginator = s3_client.get_paginator("list_objects_v2")
-
-    async for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-        if "Contents" not in page:
-            continue
-
-        for obj in page["Contents"]:
-            key = obj["Key"]
-
-            if key.endswith('_manifest.json') or key.endswith('/'):
-                continue  # 매니페스트 파일과 폴더는 제외
-
-            try:
-                response = await s3_client.get_object_tagging(Bucket=bucket_name, Key=key)
-                current_tags = response.get('TagSet', [])
-
-                is_final = any(
-                    tag['Key'] == 'status' and tag['Value'] == 'final'
-                    for tag in current_tags
-                )
-
-                if is_final:
-                    await s3_client.put_object_tagging(
-                        Bucket=bucket_name,
-                        Key=key,
-                        Tagging={
-                            'TagSet': [
-                                {
-                                    'Key': 'status',
-                                    'Value': 'outdated'
-                                },
-                            ]
-                        }
-                    )
-                    tagged_count += 1
-                
-            except Exception as e:
-                logger.error(f"파일 태그 변경 실패: {key} - {e}")
-                continue
-    
-    logger.info(f"'{entity_name}' 기존 파일 태그 변경 완료. 총 {tagged_count}개 파일이 'status=outdated'로 변경됨.")
-    return tagged_count
-
-@asynccontextmanager
-async def create_clients() -> AsyncGenerator[tuple[httpx.AsyncClient, Any, Any], None]:
-    """
-    EL 파이프라인에 필요한 비동기 클라이언트를 생성하고 세션을 관리합니다.
-    Yields:
-        tuple[httpx.AsyncClient, Any, Any]: HTTP 클라이언트와 기타 필요한 클라이언트 객체
-    """
-    logger.info("HTTPX AsyncClient 세션 생성...")
-    region = os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
-    session = aioboto3.Session(region_name=region)
-    timeout = httpx.Timeout(
-        connect=10.0, 
-        read=60.0,
-        write=10.0,
-        pool=10.0
-    )
-
-    async with (
-        httpx.AsyncClient(timeout=timeout) as http_client,
-        session.client("s3", region_name=region) as s3_client,
-        session.client("cloudfront", region_name=region) as cloudfront_client,
-    ):
-        try:
-            yield http_client, s3_client, cloudfront_client
-        finally:
-            logger.info("클라이언트 세션 종료...")
-
-async def _extract_and_load_batches(
-    extractor: Extractor,
-    loader: Loader,
-    entity_name: str,
-    dt_partition: str,
-    last_run_time: datetime | None,
-) -> tuple[list[str], int]:
-    """
-    주어진 Extractor를 사용하여 데이터를 추출하고, 배치 단위로 적재합니다.
-
-    Args:
-        extractor (Extractor): 데이터 추출기 인스턴스
-        loader (Loader): 데이터 적재기 인스턴스
-        entity_name (str): 처리할 엔티티 이름
-        dt_partition (str): 날짜 파티션 문자열 (예: "2024-06-15")
-        last_run_time (datetime | None): 마지막 실행 시간 (증분 업데이트용)
-    Returns:
-        tuple[list[str], int]: 업로드된 파일 키 목록과 총 항목 수
-    """
-    batch = []
-    total_count = 0
-    batch_count = 0
-    uploaded_files = []  # 업로드된 파일 목록 추적
-
-    s3_path_prefix = get_s3_path(entity_name, dt_partition)
-
-    async for item in extractor.extract(last_updated_at=last_run_time):
-        batch.append(item)
-        total_count += 1
-
-        if len(batch) >= BATCH_SIZE:
-            key = f"{s3_path_prefix}/batch-{batch_count}-{uuid.uuid4()}.jsonl"
-            await loader.load(batch, key)
-            uploaded_files.append(key)  # 파일 목록에 추가
-            logger.info(
-                f"S3에 {entity_name} 배치 {batch_count} 적재 완료: {len(batch)}개 항목"
-            )
-            batch.clear()
-            batch_count += 1
-
-    if batch:
-        key = f"{s3_path_prefix}/batch-{batch_count}-{uuid.uuid4()}.jsonl"
-        await loader.load(batch, key)
-        uploaded_files.append(key)  # 파일 목록에 추가
-        logger.info(
-            f"S3에 {entity_name} 마지막 배치 {batch_count} 적재 완료: {len(batch)}개 항목"
-        )
-
-    return uploaded_files, total_count
-
-
-async def run_entity_pipeline(
-    extractor: Extractor,
-    loader: Loader,
-    state_manager: StateManager,
-    s3_client: Any,
-    bucket_name: str,
-    entity_name: str,
-    dt_partition: str,
-    full_refresh: bool = False,
-) -> None:
-    """
-    하나의 엔티티에 대한 EL 파이프라인을 실행합니다.
-
-    Args:
-        extractor (Extractor): 데이터 추출기 인스턴스
-        loader (Loader): 데이터 적재기 인스턴스
-        state_manager (StateManager): 상태 관리 인스턴스
-        s3_client (Any): S3 클라이언트 인스턴스
-        bucket_name (str): S3 버킷 이름
-        entity_name (str): 처리할 엔티티 이름 (예: "games", "platforms")
-        full_refresh (bool): 전체 로드 여부
-    """
-    logger.info(f"{entity_name} 엔티티에 대한 EL 파이프라인 시작...")
-    start_time = time.perf_counter()
-    
-    # 추출 시작 시간 기록 (State 저장 기준점)
-    extraction_start = datetime.now(timezone.utc)
-
-    if full_refresh:
-        logger.info(f"'{entity_name}' Full Refresh 모드로 실행 중...")
-        await mark_old_files_as_outdated(
-            s3_client=s3_client,
-            bucket_name=bucket_name,
-            entity_name=entity_name,
-        )
-    
-    last_run_time: datetime | None = None
-    if not full_refresh:
-        last_run_time = await state_manager.get_last_run_time(entity_name)
-        if last_run_time:
-            logger.info(
-                f"'{entity_name}' 증분 업데이트 실행 (마지막 실행: {last_run_time.isoformat()})"
-            )
-        else:
-            logger.info(f"'{entity_name}' 전체 로드 실행")
-
-    try:
-        new_files, new_count = await _extract_and_load_batches(
-            extractor=extractor,
-            loader=loader,
-            entity_name=entity_name,
-            dt_partition=dt_partition,
-            last_run_time=last_run_time,
-        )
-
-        if new_count == 0:
-            logger.info(f"{entity_name} 엔티티에 새로운 데이터가 없습니다. 파이프라인 종료.")
-            await state_manager.save_last_run_time(entity_name, extraction_start)
-            return
-
-        s3_prefix = get_s3_path(entity_name, dt_partition)
-        manifest_key = f"{s3_prefix}/_manifest.json"
-
-        if full_refresh:
-            logger.info(f"Full Refresh 모드: 기존 매니페스트 파일을 초기화합니다: {manifest_key}")
-            manifest_data = {
-                "files": new_files,
-                "total_count": new_count,
-                "created_at": extraction_start.isoformat(),
-                "updated_at": extraction_start.isoformat(),
-                "batch_count": len(new_files),
-            }
-        else:
-            # 기존 매니페스트 읽기 시도
-            try:
-                resp = await s3_client.get_object(Bucket=bucket_name, Key=manifest_key)
-                content = await resp["Body"].read()
-                manifest_data = json.loads(content.decode("utf-8"))
-                logger.info(f"기존 매니페스트 파일 로드 완료: {manifest_key}")
-            
-            except s3_client.exceptions.NoSuchKey:
-                logger.info(f"기존 매니페스트 파일이 없으므로 생성합니다: {manifest_key}")
-                manifest_data = {
-                    "files": [],
-                    "total_count": 0,
-                    "created_at": extraction_start.isoformat(),
-                }
-            
-            manifest_data["files"].extend(new_files)
-            manifest_data["total_count"] += new_count
-            manifest_data["updated_at"] = extraction_start.isoformat()
-            manifest_data["batch_count"] = len(manifest_data["files"])
-
-        await s3_client.put_object(
-            Bucket=bucket_name,
-            Key=manifest_key,
-            Body=json.dumps(manifest_data, indent=2).encode("utf-8"),
-            ContentType="application/json",
-        )
-        logger.info(f"매니페스트 파일 {'교체' if full_refresh else '업데이트'} 완료: {manifest_key} (총 {len(manifest_data['files'])}개 파일)")
-
-        logger.info("업로드된 파일 태그를 'status=final'로 업데이트 중...")
-        for file_key in new_files:
-            await s3_client.put_object_tagging(
-                Bucket=bucket_name,
-                Key=file_key,
-                Tagging={
-                    'TagSet': [
-                        {
-                            'Key': 'status',
-                            'Value': 'final'
-                        },
-                    ]
-                }
-            )
-        logger.info("파일 태그 업데이트 완료.")
-
-        await state_manager.save_last_run_time(entity_name, extraction_start)
-
-        end_time = time.perf_counter()
-        elapsed_time = end_time - start_time
-
-        logger.success(
-            f"{entity_name} 엔티티 EL 파이프라인 완료 - "
-            f"총 {new_count}개 항목 처리 "
-            f"({'증분' if last_run_time else '전체'} 모드), "
-            f"소요 시간: {elapsed_time:.2f}초 "
-            f"({'평균 ' + str(int(new_count / elapsed_time)) + '개/초)' if elapsed_time > 0 and new_count > 0 else ''}"
-        )
-    
-    except Exception as e:
-        logger.error(f"{entity_name} 엔티티 EL 파이프라인 실패: {e}")
-        logger.warning(
-            f"'{entity_name}' State 저장 안 함 - "
-            f"다음 실행 시 {'전체 로드' if not last_run_time else f'{last_run_time.isoformat()} 이후부터 재시도'}"
-        )
-        raise
-
-async def main(full_refresh: bool = False, target_date: str | None = None) -> None:
-    """
-    EL 파이프라인의 실행 진입점입니다.
+    로깅 설정을 초기화합니다.
     """
     logger.remove()
-    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_level = settings.log_level.upper()
     logger.add(sys.stderr, level=log_level)
 
     logger.add(
@@ -361,84 +28,58 @@ async def main(full_refresh: bool = False, target_date: str | None = None) -> No
         level=log_level,
     )
 
-    logger.info("=== 데이터 레이크 적재 파이프라인 시작 ===")
-    pipeline_start_time = time.perf_counter()
+async def main(full_refresh: bool = False, target_date: str | None = None) -> None:
+    """
+    EL 파이프라인의 실행 진입점입니다.
+    """
+    setup_logging()
 
-    client_id = os.getenv("IGDB_CLIENT_ID")
-    static_token = os.getenv("IGDB_STATIC_TOKEN")
-    bucket_name = os.getenv("S3_BUCKET_NAME")
+    logger.info("=== 데이터 레이크 적재 파이프라인 시작 ===")
+
+    client_id = settings.igdb_client_id
+    static_token = settings.igdb_static_token
+    bucket_name = settings.s3_bucket_name
 
     if not all([client_id, static_token, bucket_name]):
         logger.error("필수 환경 변수가 설정되지 않았습니다. .env 파일을 확인하세요.")
         return
 
+    assert client_id is not None
+    assert static_token is not None
+    assert bucket_name is not None
+
     auth_provider = StaticAuthProvider(token=static_token)
 
-    if target_date:
-        dt_partition = target_date
-        logger.info(f"지정된 날짜 파티션 사용: {dt_partition}")
-    else:
-        dt_partition = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        logger.info(f"현재 날짜 파티션 사용: {dt_partition}")
-
     async with create_clients() as (http_client, s3_client, cloudfront_client):
-        state_manager = S3StateManager(client=s3_client, bucket_name=bucket_name)
-        loader = S3Loader(client=s3_client, bucket_name=bucket_name)
-
         extractors = {
             entity_name: entity_extractor(
-                client=http_client, 
-                auth_provider=auth_provider, 
+                client=http_client,
+                auth_provider=auth_provider,
                 client_id=client_id
-            ) 
+            )
             for entity_name, entity_extractor in ALL_ENTITIES.items()
         }
 
-        # 정의된 순서대로 실행 (차원 → 팩트)
-        for entity_name in EXECUTION_ORDER:
-            extractor = extractors[entity_name]
-            await run_entity_pipeline(
-                extractor=extractor,
-                loader=loader,
-                state_manager=state_manager,
-                s3_client=s3_client,
-                bucket_name=bucket_name,
-                entity_name=entity_name,
-                dt_partition=dt_partition,
-                full_refresh=full_refresh
-            )
+        orchestrator = PipelineOrchestrator(
+            s3_client=s3_client,
+            cloudfront_client=cloudfront_client,
+            extractors=extractors,
+            loader=S3Loader(client=s3_client, bucket_name=bucket_name),
+            state_manager=S3StateManager(client=s3_client, bucket_name=bucket_name),
+            bucket_name=bucket_name,
+            cloudfront_distribution_id=settings.cloudfront_distribution_id,
+        )
 
-        dist_id = os.getenv("CLOUDFRONT_DISTRIBUTION_ID")
-        if dist_id:
-            logger.info("CloudFront 캐시 무효화 시작...")
-            try:
-                fact_manifest_path = f"/raw/games/dt={dt_partition}/_manifest.json"
-                dim_manifest_path = [
-                    f"/raw/dimensions/{entity}/_manifest.json" for entity in DIMENSION_ENTITIES
-                ]
-                invalidation_path = [fact_manifest_path] + dim_manifest_path
-                
-                await cloudfront_client.create_invalidation(
-                    DistributionId=dist_id,
-                    InvalidationBatch={
-                        'Paths': {
-                            'Quantity': len(invalidation_path),
-                            'Items': invalidation_path
-                        },
-                        'CallerReference': str(uuid.uuid4())
-                    }
-                )
-                logger.success(f"CloudFront 캐시 무효화 요청 완료: {len(invalidation_path)}개 경로")
-            except Exception as e:
-                logger.error(f"CloudFront 캐시 무효화 실패: {e}")
-        else:
-            logger.warning("CLOUDFRONT_DISTRIBUTION_ID가 설정되지 않아 캐시 무효화를 건너뜁니다.")
+        results = await orchestrator.run(
+            full_refresh=full_refresh,
+            target_date=target_date,
+        )
 
-    pipeline_end_time = time.perf_counter()
-    total_elapsed_time = pipeline_end_time - pipeline_start_time
-
-    logger.success("=== 데이터 레이크 적재 파이프라인 완료 ===")
-    logger.success(f"총 소요 시간: {total_elapsed_time:.2f}초")
+        total_records = sum(r.record_count for r in results)
+        total_time = sum(r.elapsed_seconds for r in results)
+        logger.success("=== 데이터 레이크 적재 파이프라인 완료 ===")
+        logger.success(f"총 처리된 레코드 수: {total_records}")
+        logger.success(f"총 소요 시간: {total_time:.2f}초")
 
 
 if __name__ == "__main__":
@@ -455,3 +96,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     asyncio.run(main(full_refresh=args.full_refresh, target_date=args.date))
+

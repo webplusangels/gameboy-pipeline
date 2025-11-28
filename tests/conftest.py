@@ -1,11 +1,17 @@
 import json
+import os
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 
-from src.pipeline.interfaces import AuthProvider
+# 테스트 환경변수 설정 (Settings 로드 전에 설정해야 함)
+os.environ.setdefault("IGDB_CLIENT_ID", "test-client-id")
+os.environ.setdefault("IGDB_CLIENT_SECRET", "test-client-secret")
+os.environ.setdefault("IGDB_STATIC_TOKEN", "test-static-token")
+
+from src.pipeline.interfaces import AuthProvider, Extractor
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -44,3 +50,58 @@ def mock_client(mocker) -> AsyncMock:
     mock_response = mocker.Mock(raise_for_status=lambda: None)
     mock.post.return_value = mock_response
     return mock
+
+
+@pytest.fixture
+def mock_s3_client(mocker) -> AsyncMock:
+    """boto3 S3 클라이언트의 기본 Mock"""
+
+    class NoSuchKeyError(Exception):
+        pass
+
+    mock = mocker.AsyncMock()
+    mock.exceptions = mocker.MagicMock()
+    mock.exceptions.NoSuchKey = NoSuchKeyError
+
+    mock.get_paginator = mocker.MagicMock()
+    return mock
+
+
+@pytest.fixture
+def mock_cloudfront_client(mocker) -> AsyncMock:
+    """boto3 CloudFront 클라이언트의 기본 Mock"""
+    mock = mocker.AsyncMock()
+    return mock
+
+
+@pytest.fixture
+def mock_loader(mocker) -> AsyncMock:
+    """Loader 인터페이스의 기본 Mock"""
+    mock = mocker.AsyncMock()
+    return mock
+
+
+@pytest.fixture
+def mock_extractor(mocker) -> AsyncMock:
+    """Extractor 인터페이스의 기본 Mock"""
+    mock = mocker.AsyncMock(spec=Extractor)
+    mock.extract = mocker.MagicMock()
+    return mock
+
+
+@pytest.fixture
+def mock_dependencies(mocker) -> dict[str, AsyncMock]:
+    """Orchestrator에 주입할 기본 Mock 종속성들"""
+    return {
+        "s3_client": mocker.AsyncMock(),
+        "cloudfront_client": mocker.AsyncMock(),
+        "loader": mocker.AsyncMock(),
+        "state_manager": mocker.AsyncMock(),
+        "bucket_name": "test-bucket",
+    }
+
+
+@pytest.fixture
+def mock_extractors(mocker) -> dict[str, AsyncMock]:
+    """테스트용 엔티티 'games'"""
+    return {"games": mocker.AsyncMock(spec=Extractor)}

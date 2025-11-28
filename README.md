@@ -57,18 +57,18 @@
 - ✅ 데이터 기반 점진적 성능 향상
 - ✅ 체계적인 문서화
 
-자세한 설명은 문서를 [**참조**](./docs/01_Project.md)해주세요.
+자세한 설명은 [프로젝트 개요 문서](./docs/01_Project.md)를 참고해주세요.
 
 ## 성능 요약
 
 ### 벤치마크 결과
 
-| 항목                | 이전 (game-pricing-pipeline) | 현재 (gameboy-pipeline) | 개선율       |
-| ------------------- | ---------------------------- | ----------------------- | ------------ |
-| **API 호출 방식**   | 동기 (순차)                  | 비동기 (병렬)           | **6배 향상** |
-| **100개 게임 수집** | ~240초                       | ~0.14초                 | **1,700배**  |
-| **응답 성공률**     | 95%                          | 100%                    | **5%p 향상** |
-| **저장 공간**       | JSON (~500MB)                | Parquet (~150MB)        | **70% 절감** |
+| 항목                       | 이전 (game-pricing-pipeline) | 현재 (gameboy-pipeline) | 개선율       |
+| -------------------------- | ---------------------------- | ----------------------- | ------------ |
+| **API 호출 방식**          | 동기 (순차)                  | 비동기 (병렬)           | **6배 향상** |
+| **게임 수집 (100개 기준)** | ~240초                       | ~0.14초                 | **1,700배**  |
+| **응답 성공률**            | 95%                          | 100%                    | **5%p 향상** |
+| **저장 공간**              | JSON, CSV (~500MB)           | Parquet (~150MB)        | **70% 절감** |
 
 ### 비용 효율성
 
@@ -84,7 +84,7 @@
 3. **CloudFront CDN**: S3 DTO 비용 90% 절감
 4. **컬럼 기반 압축**: Parquet Snappy 압축으로 저장/전송 최적화
 
-자세한 분석은 [성능 측정 문서](./docs/04_Performance.md)를 참고하세요.
+자세한 분석은 [성능 측정 문서](./docs/04_Performance.md)를 참고해주세요.
 
 ## 기술 스택
 
@@ -95,7 +95,7 @@
 | **Extract**       | `httpx` + `asyncio` | IGDB API 비동기 데이터 수집     |
 | **Load**          | `aioboto3` + S3     | JSONL 형식으로 원본 데이터 저장 |
 | **Transform**     | `dbt` + `DuckDB`    | SQL 기반 데이터 변환 및 모델링  |
-| **Orchestration** | GitHub Actions      | 일일 스케줄링 (매일 11시 KST)   |
+| **Orchestration** | GitHub Actions      | 일일 스케줄링 (매일 4시 KST)    |
 
 ### 인프라
 
@@ -106,14 +106,14 @@
 
 ### 개발 도구
 
-- **언어**: Python 3.12
+- **언어**: Python 3.11
 - **패키지 관리**: uv (Ruff 툴체인)
 - **테스팅**: pytest + pytest-asyncio + pytest-cov
 - **타입 체킹**: mypy (strict mode)
 - **린팅**: Ruff (linter + formatter)
 - **CI/CD**: GitHub Actions
 
-자세한 선택 배경은 [기술 스택 문서](./docs/02_Tech_Stacks.md)를 참고하세요.
+자세한 선택 배경은 [기술 스택 문서](./docs/02_Tech_Stacks.md)를 참고해주세요.
 
 ## Quick Start
 
@@ -163,14 +163,10 @@ cp .env.example .env
 uv run pytest tests/ -v
 ```
 
-**파이프라인 실행 (로컬 모드)**:
+**파이프라인 실행 (로컬 모드 X)**:
 
 ```bash
-# Dry-run (API 호출 없이 검증만)
-uv run scripts/run_pipeline.py --dry-run
-
-# 실제 실행 (첫 100개 게임만)
-uv run scripts/run_pipeline.py --entity games --limit 100
+uv run scripts/run_pipeline.py
 ```
 
 **dbt 변환 실행**:

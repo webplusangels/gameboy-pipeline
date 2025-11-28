@@ -1,7 +1,8 @@
-import streamlit as st
 import pandas as pd
-import os
 import plotly.express as px
+import streamlit as st
+
+from src.config import settings
 
 # 설정 및 초기화
 st.set_page_config(
@@ -16,7 +17,7 @@ st.title(" Gameboy Pipeline Dashboard ")
 try:
     CLOUDFRONT_DOMAIN = st.secrets["CLOUDFRONT_DOMAIN"]
 except (KeyError, FileNotFoundError):
-    CLOUDFRONT_DOMAIN = os.getenv("CLOUDFRONT_DOMAIN")
+    CLOUDFRONT_DOMAIN = settings.cloudfront_domain
 
 if not CLOUDFRONT_DOMAIN:
     st.error("CLOUDFRONT_DOMAIN 환경 변수가 설정되지 않았습니다.")
@@ -39,7 +40,7 @@ def load_data() -> pd.DataFrame:
     except Exception as e:
         st.error(f"데이터를 로드하는 중 오류가 발생했습니다: {e}")
         return None
-    
+
 with st.spinner("데이터를 로드하는 중..."):
     df = load_data()
 

@@ -3,12 +3,10 @@ import os
 
 import httpx
 import pytest
-from dotenv import load_dotenv
 
+from src.config import settings
 from src.pipeline.auth import StaticAuthProvider
 from src.pipeline.extractors import IgdbExtractor
-
-load_dotenv()
 
 pytestmark = pytest.mark.integration
 
@@ -23,8 +21,8 @@ async def test_igdb_extractor_it_fetches_real_data_static_auth():
     - httpx.AsyncClient와 StaticAuthProvider를 사용합니다.
     - 실제 응답 4개를 'logs/it_extractor_response.json'에 저장합니다.
     """
-    token = os.getenv("IGDB_STATIC_TOKEN")
-    client_id = os.getenv("IGDB_CLIENT_ID")
+    token = settings.igdb_static_token
+    client_id = settings.igdb_client_id
 
     if not token or not client_id:
         pytest.skip(
@@ -67,8 +65,8 @@ async def test_igdb_extractor_it_pagination_with_500_limit():
         - 실제 API 호출이므로 rate limit(4 req/sec) 고려 필요
         - 네트워크 상태에 따라 시간이 오래 걸릴 수 있음 (약 0.5초 이상)
     """
-    token = os.getenv("IGDB_STATIC_TOKEN")
-    client_id = os.getenv("IGDB_CLIENT_ID")
+    token = settings.igdb_static_token
+    client_id = settings.igdb_client_id
 
     if not token or not client_id:
         pytest.skip("IGDB API 자격 증명이 설정되지 않았습니다.")

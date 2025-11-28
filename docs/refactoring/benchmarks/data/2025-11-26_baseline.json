@@ -1,0 +1,67 @@
+{
+  "timestamp": "2025-11-26T16:14:23.766906",
+  "tag": "baseline",
+  "test_count": 35,
+  "coverage_src": 89.0,
+  "mypy_errors": 12,
+  "ruff_issues": 20,
+  "complexity": [
+    {
+      "file_path": "scripts\\run_pipeline.py",
+      "line_count": 457,
+      "average_cc": 6.67,
+      "max_cc": 14,
+      "max_cc_function": "run_entity_pipeline (14)"
+    },
+    {
+      "file_path": "src\\pipeline\\extractors.py",
+      "line_count": 200,
+      "average_cc": 1.7,
+      "max_cc": 7,
+      "max_cc_function": "extract (7)"
+    },
+    {
+      "file_path": "src\\pipeline\\state.py",
+      "line_count": 183,
+      "average_cc": 3.33,
+      "max_cc": 5,
+      "max_cc_function": "get_last_run_time (5)"
+    },
+    {
+      "file_path": "src\\pipeline\\interfaces.py",
+      "line_count": 99,
+      "average_cc": 1.44,
+      "max_cc": 2,
+      "max_cc_function": "Extractor (2)"
+    },
+    {
+      "file_path": "src\\config.py",
+      "line_count": 57,
+      "average_cc": 1.0,
+      "max_cc": 1,
+      "max_cc_function": "Settings (1)"
+    },
+    {
+      "file_path": "src\\pipeline\\loaders.py",
+      "line_count": 37,
+      "average_cc": 2.33,
+      "max_cc": 3,
+      "max_cc_function": "S3Loader (3)"
+    },
+    {
+      "file_path": "src\\pipeline\\auth.py",
+      "line_count": 23,
+      "average_cc": 1.33,
+      "max_cc": 2,
+      "max_cc_function": "StaticAuthProvider (2)"
+    }
+  ],
+  "src_file_count": 5,
+  "avg_file_lines": 108.4,
+  "total_src_lines": 542,
+  "max_function_lines": 200,
+  "functions_over_50_lines": 4,
+  "max_function_cc": 7,
+  "maintainability_index": 90.1,
+  "test_duration_seconds": 13.81
+}

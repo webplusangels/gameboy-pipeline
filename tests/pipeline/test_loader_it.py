@@ -1,12 +1,8 @@
-import os
-
 import aioboto3
 import pytest
-from dotenv import load_dotenv
 
+from src.config import settings
 from src.pipeline.loaders import S3Loader
-
-load_dotenv()
 
 pytestmark = pytest.mark.integration
 
@@ -14,7 +10,7 @@ pytestmark = pytest.mark.integration
 @pytest.fixture(scope="function")
 async def s3_client():
     """실제 aioboto3 S3 클라이언트 세션을 생성합니다."""
-    region = os.getenv("AWS_DEFAULT_REGION")
+    region = settings.aws_default_region
 
     session = aioboto3.Session(region_name=region)
     async with session.client("s3", region_name=region) as client:
@@ -30,12 +26,12 @@ async def test_s3_loader_it_uploads_data(s3_client):
     - 실제 S3 버킷에 업로드된 객체를 확인합니다.
     - 테스트 완료 후 생성된 파일을 삭제합니다.
     """
-    bucket_name = os.getenv("S3_BUCKET_NAME")
+    bucket_name = settings.s3_bucket_name
 
     if (
         not bucket_name
-        or not os.getenv("AWS_ACCESS_KEY_ID")
-        or not os.getenv("AWS_SECRET_ACCESS_KEY")
+        or not settings.aws_access_key_id
+        or not settings.aws_secret_access_key
     ):
         pytest.skip(
             "S3_BUCKET_NAME, AWS_ACCESS_KEY_ID 또는 AWS_SECRET_ACCESS_KEY 환경 변수가 설정되지 않았습니다."

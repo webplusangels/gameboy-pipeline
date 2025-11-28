@@ -1,0 +1,102 @@
+{
+  "timestamp": "2025-11-28T22:42:34.801813",
+  "tag": "phase1",
+  "test_count": 62,
+  "coverage_src": 98.0,
+  "mypy_errors": 0,
+  "ruff_issues": 0,
+  "complexity": [
+    {
+      "file_path": "src\\pipeline\\orchestrator.py",
+      "line_count": 215,
+      "average_cc": 2.67,
+      "max_cc": 4,
+      "max_cc_function": "PipelineOrchestrator (4)"
+    },
+    {
+      "file_path": "src\\pipeline\\extractors.py",
+      "line_count": 200,
+      "average_cc": 1.7,
+      "max_cc": 7,
+      "max_cc_function": "extract (7)"
+    },
+    {
+      "file_path": "src\\pipeline\\state.py",
+      "line_count": 183,
+      "average_cc": 3.33,
+      "max_cc": 5,
+      "max_cc_function": "get_last_run_time (5)"
+    },
+    {
+      "file_path": "src\\pipeline\\s3_ops.py",
+      "line_count": 169,
+      "average_cc": 5.0,
+      "max_cc": 12,
+      "max_cc_function": "mark_old_files_as_outdated (12)"
+    },
+    {
+      "file_path": "src\\pipeline\\batch_processor.py",
+      "line_count": 116,
+      "average_cc": 2.2,
+      "max_cc": 4,
+      "max_cc_function": "process (4)"
+    },
+    {
+      "file_path": "src\\pipeline\\interfaces.py",
+      "line_count": 103,
+      "average_cc": 1.44,
+      "max_cc": 2,
+      "max_cc_function": "Extractor (2)"
+    },
+    {
+      "file_path": "scripts\\run_pipeline.py",
+      "line_count": 99,
+      "average_cc": 4.5,
+      "max_cc": 8,
+      "max_cc_function": "main (8)"
+    },
+    {
+      "file_path": "src\\pipeline\\manifest.py",
+      "line_count": 79,
+      "average_cc": 2.5,
+      "max_cc": 4,
+      "max_cc_function": "update_manifest (4)"
+    },
+    {
+      "file_path": "src\\config.py",
+      "line_count": 68,
+      "average_cc": 1.0,
+      "max_cc": 1,
+      "max_cc_function": "Settings (1)"
+    },
+    {
+      "file_path": "src\\pipeline\\loaders.py",
+      "line_count": 37,
+      "average_cc": 2.33,
+      "max_cc": 3,
+      "max_cc_function": "S3Loader (3)"
+    },
+    {
+      "file_path": "src\\pipeline\\auth.py",
+      "line_count": 23,
+      "average_cc": 1.33,
+      "max_cc": 2,
+      "max_cc_function": "StaticAuthProvider (2)"
+    },
+    {
+      "file_path": "src\\pipeline\\utils.py",
+      "line_count": 17,
+      "average_cc": 2.0,
+      "max_cc": 2,
+      "max_cc_function": "get_s3_path (2)"
+    }
+  ],
+  "src_file_count": 12,
+  "avg_file_lines": 98.4,
+  "total_src_lines": 1181,
+  "max_function_lines": 215,
+  "functions_over_50_lines": 8,
+  "max_function_cc": 12,
+  "maintainability_index": 87.3,
+  "test_duration_seconds": 6.36
+}
