@@ -6,9 +6,7 @@ from src.config import settings
 
 # 설정 및 초기화
 st.set_page_config(
-    page_title="Gameboy Pipeline Dashboard",
-    page_icon=":video_game:",
-    layout="wide"
+    page_title="Gameboy Pipeline Dashboard", page_icon=":video_game:", layout="wide"
 )
 
 st.title(" Gameboy Pipeline Dashboard ")
@@ -26,20 +24,24 @@ if not CLOUDFRONT_DOMAIN:
 # 데이터 로드 (캐싱 포함)
 DATA_DIR = f"https://{CLOUDFRONT_DOMAIN}/marts/dim_games/dim_games.parquet"
 
+
 @st.cache_data(ttl=3600)
 def load_data() -> pd.DataFrame:
     try:
         df = pd.read_parquet(DATA_DIR)
 
         # 날짜 컬럼 변환
-        if 'first_release_date' in df.columns:
-            df['release_date'] = pd.to_datetime(df['first_release_date'], unit='s', errors='coerce')
-            df['release_year'] = df['release_date'].dt.year
+        if "first_release_date" in df.columns:
+            df["release_date"] = pd.to_datetime(
+                df["first_release_date"], unit="s", errors="coerce"
+            )
+            df["release_year"] = df["release_date"].dt.year
 
         return df
     except Exception as e:
         st.error(f"데이터를 로드하는 중 오류가 발생했습니다: {e}")
         return None
+
 
 with st.spinner("데이터를 로드하는 중..."):
     df = load_data()
@@ -54,8 +56,8 @@ with col1:
     total_games = len(df)
     st.metric("총 게임 수", f"{total_games:,} 개")
 with col2:
-    if 'updated_at' in df.columns:
-        last_updated = pd.to_datetime(df['updated_at'].max(), unit='s', errors='coerce')
+    if "updated_at" in df.columns:
+        last_updated = pd.to_datetime(df["updated_at"].max(), unit="s", errors="coerce")
         st.metric("마지막 업데이트", last_updated.strftime("%Y-%m-%d %H:%M"))
 with col3:
     st.metric("데이터 소스", "IGDB API")
@@ -65,24 +67,30 @@ st.divider()
 st.sidebar.header("필터 옵션")
 
 # 출시 연도 필터
-min_year = int(df['release_year'].dropna().min()) if 'release_year' in df.columns else 2000
-max_year = int(df['release_year'].dropna().max()) if 'release_year' in df.columns else 2030
-selected_years = st.sidebar.slider("출시 연도 범위 선택", min_year, max_year, (2000, 2025))
+min_year = (
+    int(df["release_year"].dropna().min()) if "release_year" in df.columns else 2000
+)
+max_year = (
+    int(df["release_year"].dropna().max()) if "release_year" in df.columns else 2030
+)
+selected_years = st.sidebar.slider(
+    "출시 연도 범위 선택", min_year, max_year, (2000, 2025)
+)
 
 # 이름 검색
 search_term = st.sidebar.text_input("게임 이름 검색")
 
 # 필터 적용
 filtered_df = df.copy()
-if 'release_year' in filtered_df.columns:
+if "release_year" in filtered_df.columns:
     filtered_df = filtered_df[
-        (filtered_df['release_year'] >= selected_years[0]) &
-        (filtered_df['release_year'] <= selected_years[1])
+        (filtered_df["release_year"] >= selected_years[0])
+        & (filtered_df["release_year"] <= selected_years[1])
     ]
 
 if search_term:
     filtered_df = filtered_df[
-        filtered_df['game_name'].str.contains(search_term, case=False, na=False)
+        filtered_df["game_name"].str.contains(search_term, case=False, na=False)
     ]
 
 # 메인 차트 및 테이블
@@ -90,36 +98,39 @@ col_chart, col_table = st.columns([2, 1])
 
 with col_chart:
     st.subheader("연도별 게임 출시 현황")
-    if 'release_year' in filtered_df.columns:
+    if "release_year" in filtered_df.columns:
         release_counts = (
-            filtered_df['release_year']
-            .value_counts()
-            .sort_index()
-            .reset_index()
+            filtered_df["release_year"].value_counts().sort_index().reset_index()
         )
-        release_counts.columns = ['Year', 'Count']
+        release_counts.columns = ["Year", "Count"]
 
-        fig = px.bar(release_counts, x='Year', y='Count', color='Count', title='연도별 출시된 게임 수')
-        st.plotly_chart(fig, width='stretch')
+        fig = px.bar(
+            release_counts,
+            x="Year",
+            y="Count",
+            color="Count",
+            title="연도별 출시된 게임 수",
+        )
+        st.plotly_chart(fig, width="stretch")
 
 with col_table:
     st.subheader("게임 목록")
     st.dataframe(
-        filtered_df.dropna(subset=['release_year'])[
-            ['game_name', 'release_year', 'platform_names', 'genre_names']
-            ]
-            .rename(
-                columns={
-                    'game_name': '게임 이름',
-                    'release_year': '출시 연도',
-                    'platform_names': '플랫폼',
-                    'genre_names': '장르'
-                }
+        filtered_df.dropna(subset=["release_year"])[
+            ["game_name", "release_year", "platform_names", "genre_names"]
+        ]
+        .rename(
+            columns={
+                "game_name": "게임 이름",
+                "release_year": "출시 연도",
+                "platform_names": "플랫폼",
+                "genre_names": "장르",
+            }
         )
-        .sort_values(by='출시 연도', ascending=False)
+        .sort_values(by="출시 연도", ascending=False)
         .reset_index(drop=True),
-        width='stretch',
-        hide_index=True
+        width="stretch",
+        hide_index=True,
     )
 
 # 디버깅

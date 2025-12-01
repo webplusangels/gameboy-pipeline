@@ -296,9 +296,7 @@ def get_module_stats() -> tuple[int, float, int]:
     if not py_files:
         return 0, 0.0, 0
 
-    total_lines = sum(
-        len(f.read_text(encoding="utf-8").splitlines()) for f in py_files
-    )
+    total_lines = sum(len(f.read_text(encoding="utf-8").splitlines()) for f in py_files)
     return len(py_files), round(total_lines / len(py_files), 1), total_lines
 
 

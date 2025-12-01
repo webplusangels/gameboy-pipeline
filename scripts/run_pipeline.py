@@ -28,6 +28,7 @@ def setup_logging() -> None:
         level=log_level,
     )
 
+
 async def main(full_refresh: bool = False, target_date: str | None = None) -> None:
     """
     EL 파이프라인의 실행 진입점입니다.
@@ -53,9 +54,7 @@ async def main(full_refresh: bool = False, target_date: str | None = None) -> No
     async with create_clients() as (http_client, s3_client, cloudfront_client):
         extractors = {
             entity_name: entity_extractor(
-                client=http_client,
-                auth_provider=auth_provider,
-                client_id=client_id
+                client=http_client, auth_provider=auth_provider, client_id=client_id
             )
             for entity_name, entity_extractor in ALL_ENTITIES.items()
         }
@@ -96,4 +95,3 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     asyncio.run(main(full_refresh=args.full_refresh, target_date=args.date))
-
