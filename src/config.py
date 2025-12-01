@@ -16,7 +16,7 @@ from pydantic import Field, PositiveInt
 from pydantic_settings import BaseSettings
 
 
-class Settings(BaseSettings):
+class Settings(BaseSettings):  # type: ignore[misc]
     """
     애플리케이션 설정 클래스.
 
@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     # IGDB API 자격증명 (필수)
     igdb_client_id: str = Field(..., description="IGDB API Client ID")
     igdb_client_secret: str | None = Field(
-        default=None, 
-        description="IGDB API Client Secret")
+        default=None, description="IGDB API Client Secret"
+    )
     igdb_static_token: str = Field(..., description="IGDB Static Access Token")
 
     # 환경 설정 (선택, 기본값 있음)
