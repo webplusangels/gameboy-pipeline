@@ -15,6 +15,9 @@ async def test_base_igdb_extractor_is_abstract(
     [GREEN]
     BaseIgdbExtractor가 추상 속성이나 메서드를 구현하지 않으면
     TypeError를 발생시키는지 테스트합니다.
+
+    Verifies:
+        - TypeError가 발생하는지 확인
     """
 
     class IncompleteExtractor(BaseIgdbExtractor):
@@ -34,6 +37,9 @@ async def test_igdb_extractor_conforms_to_interface():
     """
     [GREEN]
     IgdbExtractor가 Extractor 인터페이스를 준수하는지 테스트합니다.
+
+    Verifies:
+        - IgdbExtractor 클래스가 Extractor를 상속하는지 확인합니다.
     """
     # 클래스가 Extractor를 상속하는지 확인
     assert issubclass(IgdbExtractor, Extractor)
@@ -49,9 +55,10 @@ async def test_igdb_extractor_returns_mock_data(
     [GREEN]
     IgdbExtractor가 모킹된 API로부터 데이터를 반환하는지 테스트합니다.
 
-    - 실제 IGDB 응답 데이터를 사용하여 추출된 게임 데이터의 정확성을 검증합니다.
-    - 페이징을 통해 모든 데이터를 수집합니다.
-    - Offset이 올바르게 증가하는지 확인합니다.
+    Verifies:
+        - 실제 IGDB 응답 데이터를 사용하여 추출된 게임 데이터의 정확성을 검증합니다.
+        - 페이징을 통해 모든 데이터를 수집합니다.
+        - Offset이 올바르게 증가하는지 확인합니다.
     """
     mock_response = Mock(
         status_code=200,
@@ -97,6 +104,9 @@ async def test_igdb_extractor_handles_http_error(
     """
     [GREEN]
     HTTP 에러(4xx, 5xx)가 발생할 때 IgdbExtractor가 예외를 발생시키는지 테스트합니다.
+
+    Verifies:
+        - HTTP 500 에러 발생 시 예외가 발생하는지 확인
     """
     mock_response = Mock()
     mock_response.status_code = 500
@@ -189,7 +199,12 @@ async def test_incremental_extract_applies_safety_margin_to_query(
     mock_client: AsyncMock,
     mock_auth_provider: AuthProvider,
 ) -> None:
-    """증분 추출 시 안전 마진이 적용된 쿼리가 생성된다."""
+    """
+    증분 추출 시 안전 마진이 적용된 쿼리가 생성되는지 테스트합니다.
+
+    Verifies:
+        - last_updated_at이 주어졌을 때 쿼리에 올바른 Unix timestamp가 포함되는지 확인
+    """
     # Arrange: IgdbExtractor의 기본 safety_margin_minutes는 5분
     extractor = IgdbExtractor(
         client=mock_client,
@@ -227,7 +242,12 @@ async def test_incremental_extract_calculates_correct_timestamp(
     mock_client: AsyncMock,
     mock_auth_provider: AuthProvider,
 ) -> None:
-    """다양한 시점에서 안전 마진이 적용된 Unix timestamp가 정확히 계산된다."""
+    """
+    다양한 시점에서 안전 마진이 적용된 Unix timestamp가 정확히 계산되는지 테스트합니다.
+
+    Verifies:
+        - last_updated_at이 주어졌을 때 쿼리에 올바른 Unix timestamp가 포함되는지 확인
+    """
     # Arrange: IgdbExtractor의 기본 safety_margin_minutes는 5분
     extractor = IgdbExtractor(
         client=mock_client,
