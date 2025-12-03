@@ -68,6 +68,7 @@ async def test_orchestrator_run_full_refresh(
             entity_name="games",
             dt_partition=target_date,
             last_run_time=None,
+            concurrent=True,
         )
 
         mock_update_manifest.assert_awaited_once()
