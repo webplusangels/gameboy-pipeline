@@ -62,6 +62,7 @@ class BatchProcessor:
         entity_name: str,
         dt_partition: str,
         last_run_time: datetime | None = None,
+        concurrent: bool = False,
     ) -> BatchResult:
         """
         데이터를 배치 단위로 추출하고 적재합니다.
@@ -71,9 +72,13 @@ class BatchProcessor:
             entity_name: 엔티티 이름 (예: "games", "platforms")
             dt_partition: 날짜 파티션 문자열 (예: "2025-01-15")
             last_run_time: 마지막 실행 시간 (증분 추출용, None이면 전체 추출)
+            concurrent: 병렬 추출 사용 여부 (기본값: False)
 
         Returns:
             BatchResult: 적재된 파일 목록, 총 레코드 수, 배치 수
+
+        Note:
+            concurrent=True 사용 시, extractor 생성 시 rate_limiter를 설정해야 합니다.
         """
         uploaded_files: list[str] = []
         total_count = 0
@@ -82,7 +87,15 @@ class BatchProcessor:
 
         s3_path_prefix = get_s3_path(entity_name, dt_partition)
 
-        async for item in extractor.extract(last_updated_at=last_run_time):
+        # 추출 방식 선택: 순차 또는 병렬
+        if concurrent:
+            data_stream = extractor.extract_concurrent(
+                last_updated_at=last_run_time,
+            )
+        else:
+            data_stream = extractor.extract(last_updated_at=last_run_time)
+
+        async for item in data_stream:
             batch.append(item)
             total_count += 1
 

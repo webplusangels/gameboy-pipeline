@@ -25,6 +25,7 @@ dependencies = [
     "radon>=6.0.1",
     "pygount>=3.1.0",
     "pytest-benchmark>=5.2.3",
+    "aiolimiter>=1.2.1",
 ]
 
 [project.optional-dependencies]
@@ -91,6 +92,7 @@ warn_return_any = false
 warn_unused_configs = true
 warn_unused_ignores = false
 disallow_untyped_defs = false
+disallow_untyped_decorators = false
 plugins = ["pydantic.mypy"]
 
 # Ignore missing type stubs for third-party libraries

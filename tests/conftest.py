@@ -5,13 +5,18 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+from dotenv import load_dotenv
 
-# 테스트 환경변수 설정 (Settings 로드 전에 설정해야 함)
+from src.pipeline.interfaces import AuthProvider, Extractor
+
+# .env 파일을 먼저 로드하여 실제 환경 변수 설정
+# 통합 테스트에서 실제 API 자격 증명을 사용할 수 있도록 함
+load_dotenv(override=False)
+
+# .env에 값이 없는 경우에만 테스트용 기본값 설정
 os.environ.setdefault("IGDB_CLIENT_ID", "test-client-id")
 os.environ.setdefault("IGDB_CLIENT_SECRET", "test-client-secret")
 os.environ.setdefault("IGDB_STATIC_TOKEN", "test-static-token")
-
-from src.pipeline.interfaces import AuthProvider, Extractor
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:

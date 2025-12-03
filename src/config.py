@@ -13,7 +13,7 @@ Pydantic을 사용해서 자동으로 .env 파일을 읽고 검증합니다.
 from typing import Literal
 
 from pydantic import Field, PositiveInt
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):  # type: ignore[misc]
@@ -69,11 +69,9 @@ class Settings(BaseSettings):  # type: ignore[misc]
         default=50000, description="Batch size for data processing"
     )
 
-    class ConfigDict:
-        """Pydantic 설정."""
-
-        env_file = ".env"  # .env 파일에서 읽기
-        case_sensitive = False  # 환경 변수 대소문자 구분 안함
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False
+    )
 
 
 # 전역 settings 인스턴스 (import해서 사용)
