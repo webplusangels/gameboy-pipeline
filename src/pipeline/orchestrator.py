@@ -139,6 +139,7 @@ class PipelineOrchestrator:
             entity_name=entity_name,
             dt_partition=dt_partition,
             last_run_time=last_run_time,
+            concurrent=True,
         )
         new_files = batch_result.uploaded_files
         new_count = batch_result.total_count
