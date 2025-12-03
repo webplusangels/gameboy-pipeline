@@ -1,11 +1,20 @@
+import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
 from typing import Any
 
+import httpx
 from loguru import logger
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from src.pipeline.interfaces import AuthProvider, Extractor
+from src.pipeline.rate_limiter import IgdbRateLimiter, optional_rate_limiter
 
 
 class BaseIgdbExtractor(Extractor, ABC):
@@ -60,16 +69,19 @@ class BaseIgdbExtractor(Extractor, ABC):
         client: Any,
         auth_provider: AuthProvider,
         client_id: str,
+        rate_limiter: IgdbRateLimiter | None = None,
     ) -> None:
         """
         Args:
             client: HTTP 클라이언트 (httpx.AsyncClient 등)
             auth_provider: 인증 토큰을 제공하는 AuthProvider
             client_id: 클라이언트 ID
+            rate_limiter: IGDB API 호출 속도 제한기 (기본값: None)
         """
         self._client = client
         self._auth_provider = auth_provider
         self._client_id = client_id
+        self._rate_limiter = rate_limiter
 
     async def extract(
         self, last_updated_at: datetime | None = None
@@ -150,6 +162,130 @@ class BaseIgdbExtractor(Extractor, ABC):
                     f"(offset={offset}, extracted={total_extracted}): {e}"
                 )
                 raise
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.TimeoutException)),
+        reraise=True,
+    )
+    async def _fetch_page(
+        self,
+        offset: int,
+        query_str: str,
+        headers: dict[str, str],
+    ) -> tuple[int, list[dict[str, Any]]]:
+        """
+        단일 페이지 데이터를 IGDB API에서 추출합니다.
+
+        Args:
+            offset: 페이지 오프셋
+            query_str: IGDB 쿼리 문자열
+            headers: HTTP 요청 헤더
+
+        Returns:
+            tuple[int, list[dict[str, Any]]]: (offset, 페이지 데이터 목록)
+        """
+        paginated_query = f"{query_str} limit {self.limit}; offset {offset};"
+
+        async with optional_rate_limiter(self._rate_limiter):
+            response = await self._client.post(
+                url=self.api_url, content=paginated_query, headers=headers
+            )
+            response.raise_for_status()
+
+        data = response.json()
+        logger.debug(f"Fetched offset={offset}, records={len(data) if data else 0}")
+
+        return offset, data if data else []
+
+    async def extract_concurrent(
+        self, last_updated_at: datetime | None = None, batch_size: int = 16
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """
+        IGDB API에서 데이터를 병렬로 추출합니다.
+
+        Args:
+            last_updated_at: 증분 추출을 위한 마지막 업데이트 시간 (없으면 전체 추출)
+            batch_size: 동시 요청할 페이지 수
+
+        Yields:
+            dict[str, Any]: 데이터 제너레이터 객체
+        """
+        entity_name = self.__class__.__name__
+        logger.info(f"IGDB {entity_name} 병렬 데이터 추출 시작...")
+
+        # === 인증 헤더 설정 ===
+        token = await self._auth_provider.get_valid_token()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Client-ID": self._client_id,
+        }
+
+        # === 쿼리 설정 ===
+        query_str: str
+        if last_updated_at:
+            safe_timestamp = last_updated_at - timedelta(
+                minutes=self.safety_margin_minutes
+            )
+            query_timestamp = int(safe_timestamp.timestamp())
+
+            logger.info(
+                f"IGDB {entity_name} 증분 추출: "
+                f"last_updated_at={last_updated_at.isoformat()} "
+                f"→ safe_timestamp={safe_timestamp.isoformat()} "
+                f"(margin: {self.safety_margin_minutes}분, timestamp={query_timestamp})"
+            )
+
+            query_str = f"{self.incremental_query} where updated_at > {query_timestamp}; sort id asc;"
+        else:
+            logger.info(f"IGDB {entity_name} 전체 추출 실행.")
+            query_str = self.base_query
+
+        # === 병렬 페이징 데이터 추출 ===
+        offset = 0
+        total_extracted = 0
+        is_finished = False
+
+        while not is_finished:
+            tasks: list[asyncio.Task[tuple[int, list[dict[str, Any]]]]] = []
+
+            try:
+                async with asyncio.TaskGroup() as tg:
+                    for _ in range(batch_size):
+                        task = tg.create_task(
+                            self._fetch_page(offset, query_str, headers)
+                        )
+                        tasks.append(task)
+                        offset += self.limit
+            except* Exception as e:
+                for exc in e.exceptions:
+                    logger.error(
+                        f"IGDB {entity_name} 병렬 데이터 추출 중 오류 발생 "
+                        f"(offset={offset}, extracted={total_extracted}): {exc}"
+                    )
+                raise
+
+            results = [task.result() for task in tasks]
+            results.sort(key=lambda x: x[0])  # offset 기준 정렬
+
+            for _, data in results:
+                if not data:
+                    is_finished = True
+                    logger.info(
+                        f"IGDB {entity_name} 모든 데이터 추출 완료. "
+                        f"총 {total_extracted}개 추출 "
+                        f"({'증분' if last_updated_at else '전체'} 모드)"
+                    )
+                    break
+
+                for item in data:
+                    yield item
+                    total_extracted += 1
+
+        logger.info(
+            f"IGDB {entity_name} 병렬 추출 종료. 총 {total_extracted}개 레코드 추출."
+        )
 
 
 class IgdbExtractor(BaseIgdbExtractor):
