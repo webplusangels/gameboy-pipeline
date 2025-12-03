@@ -1,0 +1,91 @@
+{
+  "benchmark_type": "extract_sequential",
+  "timestamp": "2025-12-03T17:47:58.476820",
+  "environment": {
+    "python_version": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "win32"
+  },
+  "config": {
+    "mode": "sequential",
+    "batch_size": 4,
+    "rate_limit": {
+      "max_concurrency": 4,
+      "requests_per_second": 4
+    }
+  },
+  "results": {
+    "sequential": [
+      {
+        "entity_name": "games",
+        "mode": "sequential",
+        "record_count": 344880,
+        "elapsed_seconds": 813.22,
+        "records_per_second": 424.09,
+        "api_calls": 690,
+        "batch_size": null,
+        "timestamp": "2025-12-03T17:47:54.869610"
+      },
+      {
+        "entity_name": "platforms",
+        "mode": "sequential",
+        "record_count": 220,
+        "elapsed_seconds": 0.58,
+        "records_per_second": 379.54,
+        "api_calls": 1,
+        "batch_size": null,
+        "timestamp": "2025-12-03T17:47:55.450651"
+      },
+      {
+        "entity_name": "genres",
+        "mode": "sequential",
+        "record_count": 23,
+        "elapsed_seconds": 0.82,
+        "records_per_second": 28.14,
+        "api_calls": 1,
+        "batch_size": null,
+        "timestamp": "2025-12-03T17:47:56.269473"
+      },
+      {
+        "entity_name": "game_modes",
+        "mode": "sequential",
+        "record_count": 6,
+        "elapsed_seconds": 0.56,
+        "records_per_second": 10.7,
+        "api_calls": 1,
+        "batch_size": null,
+        "timestamp": "2025-12-03T17:47:56.832536"
+      },
+      {
+        "entity_name": "player_perspectives",
+        "mode": "sequential",
+        "record_count": 7,
+        "elapsed_seconds": 0.81,
+        "records_per_second": 8.59,
+        "api_calls": 1,
+        "batch_size": null,
+        "timestamp": "2025-12-03T17:47:57.648205"
+      },
+      {
+        "entity_name": "themes",
+        "mode": "sequential",
+        "record_count": 22,
+        "elapsed_seconds": 0.81,
+        "records_per_second": 27.17,
+        "api_calls": 1,
+        "batch_size": null,
+        "timestamp": "2025-12-03T17:47:58.460206"
+      }
+    ],
+    "concurrent": null
+  },
+  "comparisons": null,
+  "summary": {
+    "sequential": {
+      "total_records": 345158,
+      "total_elapsed_seconds": 816.8,
+      "total_api_calls": 695
+    },
+    "concurrent": null,
+    "average_speedup": null
+  }
+}
