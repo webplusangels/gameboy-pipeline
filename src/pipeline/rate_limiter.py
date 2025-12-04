@@ -23,7 +23,7 @@ class IgdbRateLimiter:
     def __init__(
         self,
         requests_per_second: float = 3.2,
-        max_concurrency: int = 8,
+        max_concurrency: int = 4,
     ) -> None:
         """
         Rate limiter 초기화.
