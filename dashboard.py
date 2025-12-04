@@ -1,104 +1,137 @@
+import os
+
+import duckdb
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from src.config import settings
+try:
+    from src.config import settings
 
-# 설정 및 초기화
+    S3_BUCKET_NAME = settings.s3_bucket_name
+except ImportError:
+    S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+
 st.set_page_config(
     page_title="Gameboy Pipeline Dashboard", page_icon=":video_game:", layout="wide"
 )
 
-st.title(" Gameboy Pipeline Dashboard ")
+st.title("🕹️ Gameboy Pipeline Dashboard")
 
-# 환경 변수 로드
+# 환경 변수 체크
+if not S3_BUCKET_NAME:
+    # 로컬 개발용 fallback
+    # S3_BUCKET_NAME = "my-gameboy-bucket"
+    st.error("S3_BUCKET_NAME 환경 변수가 설정되지 않았습니다.")
+    st.stop()
+
+
+# --- DuckDB 연결 및 설정 ---
+@st.cache_resource
+def get_db_connection():
+    """
+    DuckDB 연결을 생성하고 S3 접근 권한을 설정합니다.
+    IAM Instance Profile을 사용하므로 별도의 Key 입력이 필요 없습니다.
+    """
+    con = duckdb.connect(database=":memory:")
+    con.execute("INSTALL httpfs; LOAD httpfs;")
+    con.execute("INSTALL aws; LOAD aws;")
+
+    # EC2 IAM Role의 자격 증명을 자동으로 로드합니다.
+    con.execute("CALL load_aws_credentials();")
+
+    return con
+
+
+con = get_db_connection()
+
+DATA_PATH = f"s3://{S3_BUCKET_NAME}/marts/dim_games/*.parquet"
+
+# --- 데이터 조회 (SQL) ---
+# 1. 요약 메트릭 조회
 try:
-    CLOUDFRONT_DOMAIN = st.secrets["CLOUDFRONT_DOMAIN"]
-except (KeyError, FileNotFoundError):
-    CLOUDFRONT_DOMAIN = settings.cloudfront_domain
+    summary_df = con.execute(f"""
+        SELECT
+            COUNT(*) as total_games,
+            MAX(to_timestamp(updated_at)) as last_updated
+        FROM '{DATA_PATH}'
+    """).df()
 
-if not CLOUDFRONT_DOMAIN:
-    st.error("CLOUDFRONT_DOMAIN 환경 변수가 설정되지 않았습니다.")
+    total_games = summary_df["total_games"][0]
+    last_updated = summary_df["last_updated"][0]
+
+except Exception as e:
+    st.error(f"S3 데이터 접근 실패: {e}")
+    st.info("EC2 IAM Role 권한이나 S3 버킷 경로를 확인해주세요.")
     st.stop()
 
-# 데이터 로드 (캐싱 포함)
-DATA_DIR = f"https://{CLOUDFRONT_DOMAIN}/marts/dim_games/dim_games.parquet"
-
-
-@st.cache_data(ttl=3600)
-def load_data() -> pd.DataFrame:
-    try:
-        df = pd.read_parquet(DATA_DIR)
-
-        # 날짜 컬럼 변환
-        if "first_release_date" in df.columns:
-            df["release_date"] = pd.to_datetime(
-                df["first_release_date"], unit="s", errors="coerce"
-            )
-            df["release_year"] = df["release_date"].dt.year
-
-        return df
-    except Exception as e:
-        st.error(f"데이터를 로드하는 중 오류가 발생했습니다: {e}")
-        return None
-
-
-with st.spinner("데이터를 로드하는 중..."):
-    df = load_data()
-
-if df is None or df.empty:
-    st.warning("데이터가 없습니다.")
-    st.stop()
-
-# 대시보드 레이아웃
+# --- 대시보드 레이아웃 ---
 col1, col2, col3 = st.columns(3)
 with col1:
-    total_games = len(df)
     st.metric("총 게임 수", f"{total_games:,} 개")
 with col2:
-    if "updated_at" in df.columns:
-        last_updated = pd.to_datetime(df["updated_at"].max(), unit="s", errors="coerce")
+    if pd.notnull(last_updated):
         st.metric("마지막 업데이트", last_updated.strftime("%Y-%m-%d %H:%M"))
+    else:
+        st.metric("마지막 업데이트", "-")
 with col3:
-    st.metric("데이터 소스", "IGDB API")
+    st.metric("데이터 소스", "S3 Data Lake (DuckDB Engine)")
 
 st.divider()
 
-st.sidebar.header("필터 옵션")
+# --- 사이드바 필터 ---
+st.sidebar.header("🔍 필터 옵션")
 
-# 출시 연도 필터
+# 연도 범위 동적 조회
+year_range = con.execute(f"""
+    SELECT
+        MIN(year(to_timestamp(first_release_date))) as min_year,
+        MAX(year(to_timestamp(first_release_date))) as max_year
+    FROM '{DATA_PATH}'
+    WHERE first_release_date IS NOT NULL
+""").df()
+
 min_year = (
-    int(df["release_year"].dropna().min()) if "release_year" in df.columns else 2000
+    int(year_range["min_year"][0]) if pd.notnull(year_range["min_year"][0]) else 2000
 )
 max_year = (
-    int(df["release_year"].dropna().max()) if "release_year" in df.columns else 2030
-)
-selected_years = st.sidebar.slider(
-    "출시 연도 범위 선택", min_year, max_year, (2000, 2025)
+    int(year_range["max_year"][0]) if pd.notnull(year_range["max_year"][0]) else 2025
 )
 
-# 이름 검색
+selected_years = st.sidebar.slider(
+    "출시 연도 범위", min_year, max_year, (min_year, max_year)
+)
+
 search_term = st.sidebar.text_input("게임 이름 검색")
 
-# 필터 적용
-filtered_df = df.copy()
-if "release_year" in filtered_df.columns:
-    filtered_df = filtered_df[
-        (filtered_df["release_year"] >= selected_years[0])
-        & (filtered_df["release_year"] <= selected_years[1])
-    ]
+# --- 메인 데이터 쿼리 ---
+query = f"""
+    SELECT
+        name as game_name,
+        year(to_timestamp(first_release_date)) as release_year,
+        platform_names,
+        genre_names
+    FROM '{DATA_PATH}'
+    WHERE release_year BETWEEN {selected_years[0]} AND {selected_years[1]}
+"""
 
 if search_term:
-    filtered_df = filtered_df[
-        filtered_df["game_name"].str.contains(search_term, case=False, na=False)
-    ]
+    query += f" AND name ILIKE '%{search_term}%'"
 
-# 메인 차트 및 테이블
-col_chart, col_table = st.columns([2, 1])
+# 결과 정렬 및 제한
+query += " ORDER BY release_year DESC LIMIT 1000"
 
-with col_chart:
-    st.subheader("연도별 게임 출시 현황")
-    if "release_year" in filtered_df.columns:
+with st.spinner("데이터 조회 중..."):
+    filtered_df = con.execute(query).df()
+
+if filtered_df.empty:
+    st.warning("조건에 맞는 게임이 없습니다.")
+else:
+    # --- 차트 및 테이블 ---
+    col_chart, col_table = st.columns([2, 1])
+
+    with col_chart:
+        st.subheader("📊 연도별 출시 현황")
         release_counts = (
             filtered_df["release_year"].value_counts().sort_index().reset_index()
         )
@@ -108,34 +141,21 @@ with col_chart:
             release_counts,
             x="Year",
             y="Count",
+            title="연도별 출시 게임 수",
             color="Count",
-            title="연도별 출시된 게임 수",
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
-with col_table:
-    st.subheader("게임 목록")
-    st.dataframe(
-        filtered_df.dropna(subset=["release_year"])[
-            ["game_name", "release_year", "platform_names", "genre_names"]
-        ]
-        .rename(
-            columns={
+    with col_table:
+        st.subheader("📋 게임 목록 (Top 1000)")
+        st.dataframe(
+            filtered_df,
+            column_config={
                 "game_name": "게임 이름",
                 "release_year": "출시 연도",
                 "platform_names": "플랫폼",
                 "genre_names": "장르",
-            }
+            },
+            hide_index=True,
+            use_container_width=True,
         )
-        .sort_values(by="출시 연도", ascending=False)
-        .reset_index(drop=True),
-        width="stretch",
-        hide_index=True,
-    )
-
-# 디버깅
-# with st.expander("원본 데이터 미리보기"):
-#     st.write(df.head())
-#     st.write(f"URL: {DATA_DIR}")
-#     st.write(f"데이터 행 수: {len(df)}, 열 수: {len(df.columns)}")
-#     st.write("데이터 컬럼:", df.columns.tolist())
