@@ -14,7 +14,7 @@ async def test_rate_limiter_context_manager():
         - 컨텍스트 매니저 진입 시 세마포어와 토큰 버킷이 올바르게 획득되는지 확인합니다.
         - 컨텍스트 매니저 종료 시 세마포어가 올바르게 해제되는지 확인합니다.
     """
-    limiter = IgdbRateLimiter()
+    limiter = IgdbRateLimiter(max_concurrency=8)
 
     async with limiter:
         # 컨텍스트 매니저 내부에서는 세마포어와 토큰 버킷이 획득된 상태여야 합니다.
@@ -57,7 +57,7 @@ async def test_rate_limiter_exception_handling():
     Verifies:
         - 컨텍스트 매니저 내에서 예외가 발생해도 세마포어가 해제되는지 확인합니다.
     """
-    limiter = IgdbRateLimiter()
+    limiter = IgdbRateLimiter(max_concurrency=8)
 
     class TestError(Exception):
         pass
@@ -93,7 +93,7 @@ async def test_optional_rate_limiter_with_limiter():
     Verifies:
         - Rate limiter가 유효할 때도 컨텍스트 매니저가 정상적으로 작동하는지 확인합니다.
     """
-    limiter = IgdbRateLimiter()
+    limiter = IgdbRateLimiter(max_concurrency=8)
 
     async with optional_rate_limiter(limiter):
         # Rate limiter가 유효할 때도 정상적으로 진입해야 합니다.
