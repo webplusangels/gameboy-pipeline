@@ -200,7 +200,7 @@ class BaseIgdbExtractor(Extractor, ABC):
         return offset, data if data else []
 
     async def extract_concurrent(
-        self, last_updated_at: datetime | None = None, batch_size: int = 16
+        self, last_updated_at: datetime | None = None, batch_size: int = 8
     ) -> AsyncGenerator[dict[str, Any], None]:
         """
         IGDB API에서 데이터를 병렬로 추출합니다.
