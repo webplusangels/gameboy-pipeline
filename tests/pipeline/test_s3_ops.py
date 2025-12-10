@@ -5,6 +5,7 @@ import pytest
 from src.pipeline.s3_ops import (
     create_clients,
     invalidate_cloudfront_cache,
+    list_files_with_tag,
     mark_old_files_as_outdated,
     tag_files_as_final,
 )
@@ -67,23 +68,21 @@ async def test_create_clients_initialization_and_teardown():
 
 
 @pytest.mark.asyncio
-async def test_mark_old_files_tags_final_files_as_outdated(
+async def test_list_files_with_tag(
     mock_s3_client: AsyncMock,
 ):
     """
-    status=final인 파일들을 status=outdated로 태그 변경하는지 테스트합니다.
+    지정된 태그를 가진 S3 파일들의 키 목록을 올바르게 조회하는지 테스트합니다.
 
     Verifies:
         1. S3에서 파일 목록을 올바르게 조회하는지
-        2. status=final 태그가 있는 파일들이 status=outdated로 변경되는지
-        3. manifest 파일과 폴더는 무시되는지
+        2. 지정된 태그를 가진 파일들의 키가 올바르게 반환되는지
     """
     page_data = {
         "Contents": [
             {"Key": "raw/games/file1.jsonl"},
             {"Key": "raw/games/file2.jsonl"},
-            {"Key": "raw/games/_manifest.json"},  # 매니페스트 파일 (무시 대상)
-            {"Key": "raw/games/"},  # 폴더 (무시 대상)
+            {"Key": "raw/games/file3.jsonl"},
         ]
     }
 
@@ -92,32 +91,44 @@ async def test_mark_old_files_tags_final_files_as_outdated(
 
     paginator = mock_s3_client.get_paginator.return_value
     paginator.paginate.return_value = async_paginate()
-    mock_s3_client.get_object_tagging.return_value = {
-        "TagSet": [{"Key": "status", "Value": "final"}]
-    }
 
-    await mark_old_files_as_outdated(
+    mock_s3_client.get_object_tagging.side_effect = [
+        {"TagSet": [{"Key": "status", "Value": "final"}]},
+        {"TagSet": [{"Key": "status", "Value": "temp"}]},
+        {"TagSet": [{"Key": "status", "Value": "final"}]},
+    ]
+
+    result = await list_files_with_tag(
         s3_client=mock_s3_client,
         bucket_name="test-bucket",
-        entity_name="games",
+        prefix="raw/games/",
+        tag_key="status",
+        tag_value="final",
     )
 
     assert mock_s3_client.get_paginator.called
-    assert mock_s3_client.put_object_tagging.call_count == 2  # final 파일 2개 변경
+    assert mock_s3_client.get_object_tagging.call_count == 3
+
+    expected_keys = [
+        "raw/games/file1.jsonl",
+        "raw/games/file3.jsonl",
+    ]
+    assert result == expected_keys
 
 
 @pytest.mark.asyncio
-async def test_mark_old_files_dimension_entity_no_contents(
+async def test_list_files_with_tag_no_contents(
     mock_s3_client: AsyncMock,
 ):
     """
-    Dimension 엔티티에서 Contents가 없는 페이지를 처리하는지 테스트합니다.
+    S3에서 파일이 없을 때 빈 목록을 반환하는지 테스트합니다.
 
     Verifies:
-        1. S3에서 파일 목록을 올바르게 조회하는지
-        2. Contents가 없는 경우에도 에러 없이 처리되는지
+        1. S3에서 파일이 없을 때 빈 목록이 반환되는지
     """
-    page_data = {}  # Contents 없음
+    page_data = {
+        # "Contents" 키가 없음
+    }
 
     async def async_paginate(*args, **kwargs):
         yield page_data
@@ -125,14 +136,114 @@ async def test_mark_old_files_dimension_entity_no_contents(
     paginator = mock_s3_client.get_paginator.return_value
     paginator.paginate.return_value = async_paginate()
 
-    await mark_old_files_as_outdated(
+    result = await list_files_with_tag(
         s3_client=mock_s3_client,
         bucket_name="test-bucket",
-        entity_name="genres",
+        prefix="raw/games/",
+        tag_key="status",
+        tag_value="final",
     )
 
     assert mock_s3_client.get_paginator.called
-    assert mock_s3_client.put_object_tagging.call_count == 0  # 변경된 파일 없음
+    assert mock_s3_client.get_object_tagging.call_count == 0
+
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_list_files_with_tag_tagging_failure(
+    mock_s3_client: AsyncMock,
+):
+    """
+    파일 태그 조회 실패 시나리오를 테스트합니다.
+
+    Verifies:
+        1. 태그 조회 실패 시에도 나머지 파일들은 정상 처리되는지
+    """
+    page_data = {
+        "Contents": [
+            {"Key": "raw/games/file1.jsonl"},
+            {"Key": "raw/games/file2.jsonl"},
+            {"Key": "raw/games/file3.jsonl"},
+        ]
+    }
+
+    async def async_paginate(*args, **kwargs):
+        yield page_data
+
+    paginator = mock_s3_client.get_paginator.return_value
+    paginator.paginate.return_value = async_paginate()
+
+    # 두 번째 파일 태그 조회 시 예외 발생
+    async def get_object_tagging_side_effect(*args, **kwargs):
+        if kwargs["Key"] == "raw/games/file2.jsonl":
+            raise Exception("S3 Error")
+        return {"TagSet": [{"Key": "status", "Value": "final"}]}
+
+    mock_s3_client.get_object_tagging.side_effect = get_object_tagging_side_effect
+
+    result = await list_files_with_tag(
+        s3_client=mock_s3_client,
+        bucket_name="test-bucket",
+        prefix="raw/games/",
+        tag_key="status",
+        tag_value="final",
+    )
+
+    assert mock_s3_client.get_paginator.called
+    assert mock_s3_client.get_object_tagging.call_count == 3
+
+    expected_keys = [
+        "raw/games/file1.jsonl",
+        "raw/games/file3.jsonl",
+    ]
+    assert result == expected_keys
+
+
+@pytest.mark.asyncio
+async def test_mark_old_files_tags_final_files_as_outdated(
+    mock_s3_client: AsyncMock,
+):
+    """
+    주어진 파일들을 status=outdated로 태그 변경하는지 테스트합니다.
+
+    Verifies:
+        1. S3에 대해 올바른 put_object_tagging 호출이 이루어지는지
+    """
+    file_keys = [
+        "raw/games/dt=2025-01-01/batch-0.jsonl",
+        "raw/games/dt=2025-01-01/batch-1.jsonl",
+    ]
+
+    await mark_old_files_as_outdated(
+        s3_client=mock_s3_client,
+        bucket_name="test-bucket",
+        file_keys=file_keys,
+    )
+
+    assert mock_s3_client.put_object_tagging.call_count == 2
+
+    for call_args in mock_s3_client.put_object_tagging.call_args_list:
+        assert call_args.kwargs["Tagging"]["TagSet"][0]["Value"] == "outdated"
+
+
+@pytest.mark.asyncio
+async def test_mark_old_files_no_file_keys(
+    mock_s3_client: AsyncMock,
+):
+    """
+    빈 파일 키 목록을 전달할 때 태그 변경이 수행되지 않는지 테스트합니다.
+
+    Verifies:
+        1. S3의 put_object_tagging 메서드가 호출되지 않는지
+    """
+    await mark_old_files_as_outdated(
+        s3_client=mock_s3_client,
+        bucket_name="test-bucket",
+        file_keys=[],
+    )
+
+    assert mock_s3_client.put_object_tagging.call_count == 0
 
 
 @pytest.mark.asyncio
@@ -143,29 +254,17 @@ async def test_mark_old_files_tagging_failure(
     태그 변경 실패 시나리오를 테스트합니다.
 
     Verifies:
-        1. S3에서 파일 목록을 올바르게 조회하는지
-        2. 태그 변경 실패 시에도 나머지 파일들은 정상 처리되는지
+        1. 태그 변경 실패 시에도 나머지 파일들은 정상 처리되는지
     """
-    page_data = {
-        "Contents": [
-            {"Key": "raw/games/file1.jsonl"},
-            {"Key": "raw/games/file2.jsonl"},
-        ]
-    }
-
-    async def async_paginate(*args, **kwargs):
-        yield page_data
-
-    paginator = mock_s3_client.get_paginator.return_value
-    paginator.paginate.side_effect = async_paginate
-    mock_s3_client.get_object_tagging.return_value = {
-        "TagSet": [{"Key": "status", "Value": "final"}]
-    }
+    file_keys = [
+        "raw/games/dt=2025-01-01/batch-0.jsonl",
+        "raw/games/dt=2025-01-01/batch-1.jsonl",
+    ]
 
     # 첫 번째 파일 태그 변경 시 예외 발생
     async def put_object_tagging_side_effect(*args, **kwargs):
-        if kwargs["Key"] == "raw/games/file1.jsonl":
-            raise Exception
+        if kwargs["Key"] == "raw/games/dt=2025-01-01/batch-0.jsonl":
+            raise Exception("S3 Error")
         return None
 
     mock_s3_client.put_object_tagging.side_effect = put_object_tagging_side_effect
@@ -173,10 +272,9 @@ async def test_mark_old_files_tagging_failure(
     await mark_old_files_as_outdated(
         s3_client=mock_s3_client,
         bucket_name="test-bucket",
-        entity_name="games",
+        file_keys=file_keys,
     )
 
-    assert mock_s3_client.get_paginator.called
     assert mock_s3_client.put_object_tagging.call_count == 2  # 두 파일 모두 시도
 
 
