@@ -89,3 +89,4 @@ local_dashboard.py
 
 # Ignore data files
 data/**/*.jsonl
+scripts/run_local_e2e_pipeline.py
