@@ -61,7 +61,7 @@ SELECT
   websites,
 
   -- 추가 필드
-  COALESCE(hypes, NULL) AS hypes
+  hypes
 
 FROM deduplicated_games
 WHERE name IS NOT NULL  -- 이름 없는 게임 제외
