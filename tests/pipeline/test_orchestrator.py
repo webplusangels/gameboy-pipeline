@@ -32,6 +32,11 @@ async def test_orchestrator_run_full_refresh(
     with (
         patch("src.pipeline.orchestrator.BatchProcessor") as mock_batch_processor,
         patch(
+            "src.pipeline.orchestrator.list_files_with_tag",
+            new_callable=AsyncMock,
+            return_value=["raw/games/old-file.jsonl"],
+        ) as mock_list_files,
+        patch(
             "src.pipeline.orchestrator.mark_old_files_as_outdated",
             new_callable=AsyncMock,
         ) as mock_mark_old_files,
@@ -57,10 +62,12 @@ async def test_orchestrator_run_full_refresh(
 
         results = await orchestrator.run(full_refresh=True, target_date=target_date)
 
+        mock_list_files.assert_awaited_once()
+
         mock_mark_old_files.assert_awaited_once_with(
             s3_client=mock_dependencies["s3_client"],
             bucket_name=mock_dependencies["bucket_name"],
-            entity_name="games",
+            file_keys=["raw/games/old-file.jsonl"],
         )
 
         mock_bp_instance.process.assert_called_once_with(
@@ -141,3 +148,47 @@ async def test_orchestrator_run_incremental_no_data(
 
         assert results[0].record_count == 0
         assert results[0].mode == "incremental"
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_full_refresh_extraction_failure_no_outdated(
+    mock_dependencies: dict[str, AsyncMock],
+    mock_extractors: dict[str, AsyncMock],
+):
+    """
+    Full Refresh 모드에서 추출기가 실패하고 기존 파일이 outdated로 변경되지 않는 경우의 흐름을 테스트합니다.
+
+    Verifies:
+        1. mark_old_files_as_outdated가 호출되지 않는지
+        2. 예외가 상위로 전파되는지
+        3. 기존 데이터가 안전하게 유지되는지
+    """
+    with (
+        patch("src.pipeline.orchestrator.BatchProcessor") as mock_batch_processor,
+        patch(
+            "src.pipeline.orchestrator.list_files_with_tag",
+            new_callable=AsyncMock,
+            return_value=["raw/games/old-file.jsonl"],
+        ) as mock_list_files,
+        patch(
+            "src.pipeline.orchestrator.mark_old_files_as_outdated",
+            new_callable=AsyncMock,
+        ) as mock_mark_old_files,
+        patch("src.pipeline.orchestrator.EXECUTION_ORDER", ["games"]),
+    ):
+        mock_bp_instance = mock_batch_processor.return_value
+        mock_bp_instance.process = AsyncMock(
+            side_effect=Exception("IGDB API 호출 실패")
+        )
+
+        orchestrator = PipelineOrchestrator(
+            **mock_dependencies,
+            extractors=mock_extractors,
+        )
+
+        with pytest.raises(Exception, match="IGDB API 호출 실패"):
+            await orchestrator.run(full_refresh=True)
+
+        mock_list_files.assert_awaited_once()
+
+        mock_mark_old_files.assert_not_called()

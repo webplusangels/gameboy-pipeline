@@ -84,3 +84,9 @@ Thumbs.db
 htmlcov/
 
 .streamlit/secrets.toml
+LOCAL_DEVELOPMENT.md
+local_dashboard.py
+
+# Ignore data files
+data/**/*.jsonl
+scripts/run_local_e2e_pipeline.py

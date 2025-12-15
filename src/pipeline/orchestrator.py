@@ -6,12 +6,13 @@ from typing import Any
 from loguru import logger
 
 from src.pipeline.batch_processor import BatchProcessor
-from src.pipeline.constants import EXECUTION_ORDER
+from src.pipeline.constants import DIMENSION_ENTITIES, EXECUTION_ORDER
 from src.pipeline.extractors import BaseIgdbExtractor
 from src.pipeline.interfaces import Extractor, Loader, StateManager
 from src.pipeline.manifest import update_manifest
 from src.pipeline.s3_ops import (
     invalidate_cloudfront_cache,
+    list_files_with_tag,
     mark_old_files_as_outdated,
     tag_files_as_final,
 )
@@ -120,11 +121,20 @@ class PipelineOrchestrator:
         extraction_start = datetime.now(UTC)
 
         # Full Refresh시 기존 파일 outdated 태그 처리
+        files_to_outdate: list[str] = []
+
         if full_refresh:
-            await mark_old_files_as_outdated(
+            files_to_outdate = await list_files_with_tag(
                 s3_client=self._s3_client,
                 bucket_name=self._bucket_name,
-                entity_name=entity_name,
+                prefix=f"raw/{entity_name}/"
+                if entity_name not in DIMENSION_ENTITIES
+                else f"raw/dimensions/{entity_name}/",
+                tag_key="status",
+                tag_value="final",
+            )
+            logger.info(
+                f"엔티티 '{entity_name}' 전체 갱신을 위해 기존 'final' 파일 {len(files_to_outdate)}개를 'outdated'로 태그 변경 예정"
             )
 
         # 실행 컨텍스트 결정
@@ -157,6 +167,14 @@ class PipelineOrchestrator:
                 extraction_start=extraction_start,
                 full_refresh=full_refresh,
             )
+
+            # Full Refresh시 기존 파일 outdated 태그 처리
+            if files_to_outdate:
+                await mark_old_files_as_outdated(
+                    s3_client=self._s3_client,
+                    bucket_name=self._bucket_name,
+                    file_keys=files_to_outdate,
+                )
 
             # 새 파일 final 태그 처리
             await tag_files_as_final(
