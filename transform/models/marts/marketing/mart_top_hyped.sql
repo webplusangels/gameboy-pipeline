@@ -2,7 +2,7 @@
     config(
         materialized = 'table' if target.name == 'prod_s3' else 'view',
         post_hook = [
-            "COPY (SELECT * FROM {{ this }}) TO 's3://" ~ env_var('S3_BUCKET_NAME') ~ "/marts/marketing/mart_top_hyped.sql.parquet' (FORMAT PARQUET, COMPRESSION 'snappy', OVERWRITE_OR_IGNORE 1)"
+            "COPY (SELECT * FROM {{ this }}) TO 's3://" ~ env_var('S3_BUCKET_NAME') ~ "/marts/marketing/mart_top_hyped.parquet' (FORMAT PARQUET, COMPRESSION 'snappy', OVERWRITE_OR_IGNORE 1)"
         ] if target.name == 'prod_s3' else []
     )
 }}
