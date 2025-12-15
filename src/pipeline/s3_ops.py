@@ -102,7 +102,7 @@ async def mark_old_files_as_outdated(
         logger.info("태그를 업데이트할 파일 키가 없습니다. 작업을 건너뜁니다.")
         return
 
-    logger.info(f"'기존 파일 {len(file_keys)}개를 'outdated'로 태그 변경 시작...")
+    logger.info(f"기존 파일 {len(file_keys)}개를 'outdated'로 태그 변경 시작...")
 
     tagged_count = 0
     failed_files: list[str] = []
