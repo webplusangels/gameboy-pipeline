@@ -20,5 +20,7 @@ SELECT
 FROM {{ ref('dim_games') }}
 WHERE hypes IS NOT NULL
   AND hypes > 0
+  -- 출시일이 미래이거나 미정인 게임만 (출시 예정작)
+  AND (first_release_date IS NULL OR to_timestamp(first_release_date) > CURRENT_TIMESTAMP)
 ORDER BY hypes DESC
 LIMIT 50
