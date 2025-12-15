@@ -130,6 +130,9 @@ new_processed as (
         pp.perspective_names,
         g.url,
         g.cover,
+        g.hypes,
+        g.aggregated_rating,
+        g.aggregated_rating_count,
         g.first_release_date,
         g.created_at,
         g.updated_at
@@ -159,7 +162,7 @@ old_processed as (
 -- 병합 및 중복 제거
 combined as (
     select * from old_processed
-    union all
+    union all by name
     select * from new_processed
 )
 

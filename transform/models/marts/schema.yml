@@ -27,3 +27,13 @@ models:
         description: "테마 이름"
       - name: player_perspectives
         description: "플레이어 시점"
+      - name: hypes
+        description: "게임에 대한 기대감(Hype)"
+        tests:
+          - not_null:
+              config:
+                severity: warn
+      - name: aggregated_rating
+        description: "외부 비평가 평균 평점 (0-100)"
+      - name: aggregated_rating_count
+        description: "평가 참여 수"

@@ -61,7 +61,9 @@ SELECT
   websites,
 
   -- 추가 필드
-  hypes
+  hypes,
+  aggregated_rating,
+  aggregated_rating_count
 
 FROM deduplicated_games
 WHERE name IS NOT NULL  -- 이름 없는 게임 제외
