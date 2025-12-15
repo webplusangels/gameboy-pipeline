@@ -127,3 +127,16 @@ jobs:
 
           uv run dbt test --target prod_s3 \
             --vars '{"partition_date": "${{ steps.date.outputs.DATE }}"}' \
+
+      - name: Restart Streamlit Dashboard
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          port: 22
+          script: |
+            echo "🔄 Data Updated! Restarting Dashboard..."
+            # 서비스 재시작 (캐시 초기화 & DB 재연결 효과)
+            sudo systemctl restart dashboard
+            echo "✅ Dashboard Restarted Successfully!"
