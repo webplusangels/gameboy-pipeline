@@ -37,7 +37,7 @@ async def test_igdb_platform_extractor_it_fetches_real_data():
         results = []
         async for item in extractor.extract():
             results.append(item)
-            if len(results) >= 4:  # 4개 항목만 수집
+            if len(results) >= 4:  # Rate limit 고려 - 최소한으로 수집
                 break
 
         assert len(results) == 4

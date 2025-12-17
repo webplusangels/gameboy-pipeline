@@ -93,8 +93,8 @@ async def test_popscore_pipeline_e2e_with_temp_directory(s3_client):
             paginator = s3_client.get_paginator("list_objects_v2")
             temp_files = []
 
-            # Retry logic for S3 eventual consistency
-            max_retries = 5
+            # Retry logic for S3 eventual consistency (exponential backoff)
+            max_retries = 10
             for retry in range(max_retries):
                 temp_files = []
                 async for page in paginator.paginate(
@@ -107,10 +107,12 @@ async def test_popscore_pipeline_e2e_with_temp_directory(s3_client):
                     break
 
                 if retry < max_retries - 1:
+                    # Exponential backoff: 1s, 2s, 4s, 8s, ...
+                    wait_time = min(2**retry, 8)  # Cap at 8 seconds
                     print(
-                        f"Retry {retry + 1}: Temp files found: {len(temp_files)}, waiting..."
+                        f"Retry {retry + 1}/{max_retries}: Temp files found: {len(temp_files)}, waiting {wait_time}s..."
                     )
-                    await asyncio.sleep(1)  # Wait 1 second before retry
+                    await asyncio.sleep(wait_time)
 
             print(f"Temp files found: {len(temp_files)}")
             for f in temp_files:
@@ -233,8 +235,8 @@ async def test_popscore_idempotency_with_same_date_rerun(s3_client):
                 batches.append(batch_key)
                 await loader.load(data=batch_data, key=batch_key)
 
-            # Wait for S3 eventual consistency
-            await asyncio.sleep(2)
+            # Wait for S3 eventual consistency (increased for cross-version stability)
+            await asyncio.sleep(3)
 
             await delete_files_in_partition(
                 s3_client=s3_client,
@@ -278,8 +280,8 @@ async def test_popscore_idempotency_with_same_date_rerun(s3_client):
                 batches_2.append(batch_key)
                 await loader.load(data=batch_data, key=batch_key)
 
-            # Wait for S3 eventual consistency
-            await asyncio.sleep(2)
+            # Wait for S3 eventual consistency (increased for cross-version stability)
+            await asyncio.sleep(3)
 
             await delete_files_in_partition(
                 s3_client=s3_client,
