@@ -347,17 +347,20 @@ class IgdbPopScoreExtractor(BaseIgdbExtractor):
     @property
     def base_query(self) -> str:
         """
-        Popularity Types:
-        1: Visits (조회수)
+        Popularity Types (전체 11개):
+        1: Visits (IGDB 조회수)
         2: Want to Play (기대 지수)
         3: Playing (현재 플레이 중)
         4: Played (플레이 한 적 있음)
-        5: Steam 24hr Peak (실질 인기도)
-        6: Steam Positive Reviews (긍정 여론)
-        7: Steam Negative Reviews (부정 여론)
-        8: Steam Total Reviews (전체 리뷰 수)
+        5: 24hr Peak Players (Steam)
+        6: Positive Reviews (Steam)
+        7: Negative Reviews (Steam)
+        8: Total Reviews (Steam)
+        9: Global Top Sellers (Steam)
+        10: Most Wishlisted Upcoming (Steam)
+        34: 24hr Hours Watched (Twitch)
         """
-        target_types = (1, 2, 3, 4, 5, 6, 7, 8)
+        target_types = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 34)
         return f"fields game_id, popularity_type, value; where popularity_type = {target_types}; sort id asc;"
 
     async def extract(
@@ -389,7 +392,7 @@ class IgdbPopScoreExtractor(BaseIgdbExtractor):
 
         Args:
             last_updated_at: 증분 추출을 위한 마지막 업데이트 시간 (없으면 전체 추출)
-            batch_size: 동시 요청할 페이지 수
+            batch_size: 병렬 요청 배치 크기
 
         Yields:
             dict[str, Any]: 데이터 제너레이터 객체
@@ -404,3 +407,11 @@ class IgdbPopScoreExtractor(BaseIgdbExtractor):
             last_updated_at=None, batch_size=batch_size
         ):
             yield item
+
+
+class IgdbPopularityTypesExtractor(BaseIgdbExtractor):
+    """IGDB API로부터 인기 점수 유형(Popularity Types) 데이터를 추출하는 Extractor 구현체."""
+
+    @property
+    def api_url(self) -> str:
+        return "https://api.igdb.com/v4/popularity_types"

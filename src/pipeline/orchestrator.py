@@ -6,14 +6,20 @@ from typing import Any
 from loguru import logger
 
 from src.pipeline.batch_processor import BatchProcessor
-from src.pipeline.constants import DIMENSION_ENTITIES, EXECUTION_ORDER
+from src.pipeline.constants import (
+    DIMENSION_ENTITIES,
+    EXECUTION_ORDER,
+    TIME_SERIES_ENTITIES,
+)
 from src.pipeline.extractors import BaseIgdbExtractor
 from src.pipeline.interfaces import Extractor, Loader, StateManager
 from src.pipeline.manifest import update_manifest
 from src.pipeline.s3_ops import (
+    delete_files_in_partition,
     invalidate_cloudfront_cache,
     list_files_with_tag,
     mark_old_files_as_outdated,
+    move_files_atomically,
     tag_files_as_final,
 )
 
@@ -120,10 +126,24 @@ class PipelineOrchestrator:
         start_time = perf_counter()
         extraction_start = datetime.now(UTC)
 
+        # 시계열 데이터는 temp 디렉토리 사용 (원자적 교체를 위한 안전 장치)
+        original_dt_partition = dt_partition
+        temp_run_id = None
+
+        if entity_name in TIME_SERIES_ENTITIES:
+            import uuid
+
+            temp_run_id = str(uuid.uuid4())[:8]
+            dt_partition = f"{dt_partition}/_temp_{temp_run_id}"
+            logger.info(
+                f"시계열 엔티티 '{entity_name}' temp 디렉토리 사용: {dt_partition}"
+            )
+
         # Full Refresh시 기존 파일 outdated 태그 처리
+        # 단, 시계열 엔티티(popscore)는 과거 데이터를 유지하므로 outdated 처리 제외
         files_to_outdate: list[str] = []
 
-        if full_refresh:
+        if full_refresh and entity_name not in TIME_SERIES_ENTITIES:
             files_to_outdate = await list_files_with_tag(
                 s3_client=self._s3_client,
                 bucket_name=self._bucket_name,
@@ -135,6 +155,10 @@ class PipelineOrchestrator:
             )
             logger.info(
                 f"엔티티 '{entity_name}' 전체 갱신을 위해 기존 'final' 파일 {len(files_to_outdate)}개를 'outdated'로 태그 변경 예정"
+            )
+        elif full_refresh and entity_name in TIME_SERIES_ENTITIES:
+            logger.info(
+                f"엔티티 '{entity_name}'는 시계열 데이터이므로 기존 파일을 'outdated'로 변경하지 않습니다."
             )
 
         # 실행 컨텍스트 결정
@@ -156,12 +180,42 @@ class PipelineOrchestrator:
 
         # 데이터가 있는 경우
         if new_count > 0:
+            # 시계열 데이터: temp에서 본 디렉토리로 원자적 교체
+            if entity_name in TIME_SERIES_ENTITIES and temp_run_id:
+                logger.info(f"시계열 엔티티 '{entity_name}' 원자적 교체 시작...")
+
+                # 1. 기존 파일 삭제
+                dest_prefix = f"raw/{entity_name}/dt={original_dt_partition}/"
+                await delete_files_in_partition(
+                    s3_client=self._s3_client,
+                    bucket_name=self._bucket_name,
+                    prefix=dest_prefix,
+                )
+
+                # 2. temp에서 본 디렉토리로 이동
+                source_prefix = (
+                    f"raw/{entity_name}/dt={original_dt_partition}/_temp_{temp_run_id}/"
+                )
+                moved_count = await move_files_atomically(
+                    s3_client=self._s3_client,
+                    bucket_name=self._bucket_name,
+                    source_prefix=source_prefix,
+                    dest_prefix=dest_prefix,
+                )
+
+                logger.success(
+                    f"시계열 엔티티 '{entity_name}' 원자적 교체 완료: {moved_count}개 파일"
+                )
+
+                # 이동된 파일 목록 업데이트 (경로 변경)
+                new_files = [f.replace(source_prefix, dest_prefix) for f in new_files]
+
             # 매니페스트 업데이트
             await update_manifest(
                 s3_client=self._s3_client,
                 bucket_name=self._bucket_name,
                 entity_name=entity_name,
-                dt_partition=dt_partition,
+                dt_partition=original_dt_partition,  # 원본 파티션 사용
                 new_files=new_files,
                 new_count=new_count,
                 extraction_start=extraction_start,
@@ -222,6 +276,13 @@ class PipelineOrchestrator:
         Returns:
             datetime | None: 마지막 실행 시간 또는 None(전체 로드 시)
         """
+        # 시계열 엔티티는 항상 전체 추출 (증분 추출 미지원)
+        if entity_name in TIME_SERIES_ENTITIES:
+            logger.info(
+                f"엔티티 '{entity_name}'는 시계열 데이터로 항상 전체 로드 모드로 실행"
+            )
+            return None
+
         if full_refresh:
             logger.info(f"엔티티 '{entity_name}' 전체 로드 모드로 실행")
             return None
