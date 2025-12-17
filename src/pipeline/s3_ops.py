@@ -291,6 +291,8 @@ async def move_files_atomically(
     Returns:
         int: 이동된 파일 개수
     """
+    import asyncio
+
     moved_count = 0
     paginator = s3_client.get_paginator("list_objects_v2")
 
@@ -304,25 +306,42 @@ async def move_files_atomically(
             relative_path = source_key[len(source_prefix) :]
             dest_key = dest_prefix + relative_path
 
-            try:
-                # Copy
-                await s3_client.copy_object(
-                    Bucket=bucket_name,
-                    CopySource={"Bucket": bucket_name, "Key": source_key},
-                    Key=dest_key,
-                )
+            # S3 eventual consistency를 위한 재시도 로직
+            max_retries = 5
+            for retry in range(max_retries):
+                try:
+                    # Copy
+                    await s3_client.copy_object(
+                        Bucket=bucket_name,
+                        CopySource={"Bucket": bucket_name, "Key": source_key},
+                        Key=dest_key,
+                    )
 
-                # Delete source
-                await s3_client.delete_object(
-                    Bucket=bucket_name,
-                    Key=source_key,
-                )
+                    # Delete source
+                    await s3_client.delete_object(
+                        Bucket=bucket_name,
+                        Key=source_key,
+                    )
 
-                moved_count += 1
+                    moved_count += 1
+                    break  # Success, exit retry loop
 
-            except Exception as e:
-                logger.error(f"파일 이동 실패: {source_key} -> {dest_key}: {e}")
-                raise
+                except s3_client.exceptions.NoSuchKey:
+                    if retry < max_retries - 1:
+                        wait_time = 2**retry  # Exponential backoff: 1s, 2s, 4s, 8s, 16s
+                        logger.warning(
+                            f"NoSuchKey for {source_key}, retrying in {wait_time}s... (attempt {retry + 1}/{max_retries})"
+                        )
+                        await asyncio.sleep(wait_time)
+                    else:
+                        logger.error(
+                            f"파일 이동 실패 (NoSuchKey after {max_retries} retries): {source_key} -> {dest_key}"
+                        )
+                        raise
+
+                except Exception as e:
+                    logger.error(f"파일 이동 실패: {source_key} -> {dest_key}: {e}")
+                    raise
 
     logger.info(f"{moved_count}개 파일을 {source_prefix}에서 {dest_prefix}로 이동 완료")
     return moved_count

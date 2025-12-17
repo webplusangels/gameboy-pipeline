@@ -124,6 +124,9 @@ async def test_popscore_pipeline_e2e_with_temp_directory(s3_client):
                 assert "batch-" in file_key
                 assert file_key.endswith(".jsonl")
 
+            # Wait before operations to ensure S3 consistency across all nodes
+            await asyncio.sleep(3)
+
             # === 3. Delete Old Files (if any) ===
             _ = await delete_files_in_partition(
                 s3_client=s3_client,
