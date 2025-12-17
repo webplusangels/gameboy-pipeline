@@ -19,3 +19,8 @@ DIMENSION_ENTITIES = {
 FACT_ENTITIES = {
     "games",
 }
+
+# 시계열 엔티티: 과거 데이터를 유지해야 하므로 멱등성을 위해 UUID 없이 파일명 생성
+TIME_SERIES_ENTITIES = {
+    "popscore",
+}

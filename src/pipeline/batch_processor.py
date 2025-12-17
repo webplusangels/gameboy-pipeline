@@ -100,7 +100,7 @@ class BatchProcessor:
             total_count += 1
 
             if len(batch) >= self._batch_size:
-                key = self._generate_batch_key(s3_path_prefix, batch_count)
+                key = self._generate_batch_key(s3_path_prefix, batch_count, entity_name)
                 await self._loader.load(batch, key)
                 uploaded_files.append(key)
                 logger.debug(
@@ -112,7 +112,7 @@ class BatchProcessor:
 
         # 남은 배치 처리
         if batch:
-            key = self._generate_batch_key(s3_path_prefix, batch_count)
+            key = self._generate_batch_key(s3_path_prefix, batch_count, entity_name)
             await self._loader.load(batch, key)
             uploaded_files.append(key)
             batch_count += 1
@@ -124,6 +124,28 @@ class BatchProcessor:
         )
 
     @staticmethod
-    def _generate_batch_key(s3_path_prefix: str, batch_count: int) -> str:
-        """배치 파일의 S3 키를 생성합니다."""
-        return f"{s3_path_prefix}/batch-{batch_count}-{uuid.uuid4()}.jsonl"
+    def _generate_batch_key(
+        s3_path_prefix: str, batch_count: int, entity_name: str
+    ) -> str:
+        """
+        배치 파일의 S3 키를 생성합니다.
+
+        시계열 엔티티(popscore)는 멱등성을 위해 UUID 없이 고정 파일명을 사용하고,
+        일반 엔티티는 UUID를 사용하여 충돌을 방지합니다.
+
+        Args:
+            s3_path_prefix: S3 경로 접두사
+            batch_count: 배치 번호
+            entity_name: 엔티티 이름
+
+        Returns:
+            str: S3 키
+        """
+        from src.pipeline.constants import TIME_SERIES_ENTITIES
+
+        if entity_name in TIME_SERIES_ENTITIES:
+            # 시계열 데이터: 멱등성을 위해 UUID 제거 (같은 날짜 재실행 시 덮어쓰기)
+            return f"{s3_path_prefix}/batch-{batch_count}.jsonl"
+        else:
+            # 일반 데이터: UUID 사용 (충돌 방지)
+            return f"{s3_path_prefix}/batch-{batch_count}-{uuid.uuid4()}.jsonl"

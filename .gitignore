@@ -90,3 +90,6 @@ local_dashboard.py
 # Ignore data files
 data/**/*.jsonl
 scripts/run_local_e2e_pipeline.py
+scripts/check_dbt_results.py
+scripts/check_popscore_scale.py
+scripts/check_popularity_data.py

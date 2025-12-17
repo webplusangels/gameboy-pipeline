@@ -5,6 +5,8 @@ from src.pipeline.extractors import (
     IgdbGenreExtractor,
     IgdbPlatformExtractor,
     IgdbPlayerPerspectiveExtractor,
+    IgdbPopScoreExtractor,
+    IgdbPopularityTypesExtractor,
     IgdbThemeExtractor,
 )
 
@@ -15,4 +17,6 @@ ALL_ENTITIES: dict[str, type[BaseIgdbExtractor]] = {
     "game_modes": IgdbGameModeExtractor,
     "player_perspectives": IgdbPlayerPerspectiveExtractor,
     "themes": IgdbThemeExtractor,
+    "popscore": IgdbPopScoreExtractor,
+    "popularity_types": IgdbPopularityTypesExtractor,
 }

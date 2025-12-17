@@ -4,9 +4,11 @@ import pytest
 
 from src.pipeline.s3_ops import (
     create_clients,
+    delete_files_in_partition,
     invalidate_cloudfront_cache,
     list_files_with_tag,
     mark_old_files_as_outdated,
+    move_files_atomically,
     tag_files_as_final,
 )
 
@@ -418,3 +420,234 @@ async def test_invalidate_cloudfront_cache_failure(
     )
 
     mock_cloudfront_client.create_invalidation.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_files_in_partition(
+    mock_s3_client: AsyncMock,
+):
+    """
+    지정된 파티션의 모든 파일을 삭제하는지 테스트합니다.
+
+    Verifies:
+        1. paginator를 통해 파일 목록을 조회하는지
+        2. S3 클라이언트의 delete_objects 메서드가 올바르게 호출되는지
+        3. 삭제된 파일 수가 올바르게 반환되는지
+    """
+    page_data = {
+        "Contents": [
+            {"Key": "raw/popscore/dt=2025-01-15/batch-0.jsonl"},
+            {"Key": "raw/popscore/dt=2025-01-15/batch-1.jsonl"},
+        ]
+    }
+
+    async def async_paginate(*args, **kwargs):
+        yield page_data
+
+    paginator = mock_s3_client.get_paginator.return_value
+    paginator.paginate.return_value = async_paginate()
+
+    deleted_count = await delete_files_in_partition(
+        s3_client=mock_s3_client,
+        bucket_name="test-bucket",
+        prefix="raw/popscore/dt=2025-01-15/",
+    )
+
+    mock_s3_client.get_paginator.assert_called_once_with("list_objects_v2")
+
+    mock_s3_client.delete_objects.assert_awaited_once()
+    delete_call_args = mock_s3_client.delete_objects.call_args.kwargs
+    deleted_keys = [obj["Key"] for obj in delete_call_args["Delete"]["Objects"]]
+    assert deleted_keys == [
+        "raw/popscore/dt=2025-01-15/batch-0.jsonl",
+        "raw/popscore/dt=2025-01-15/batch-1.jsonl",
+    ]
+
+    assert deleted_count == 2
+
+
+@pytest.mark.asyncio
+async def test_delete_files_in_partition_failure(
+    mock_s3_client: AsyncMock,
+):
+    """
+    S3 파일 삭제 실패 시나리오를 테스트합니다.
+
+    Verifies:
+        1. 예외가 발생해도 함수가 정상 종료되는지
+    """
+    page_data = {
+        "Contents": [
+            {"Key": "raw/popscore/dt=2025-01-15/batch-0.jsonl"},
+            {"Key": "raw/popscore/dt=2025-01-15/batch-1.jsonl"},
+        ]
+    }
+
+    async def async_paginate(*args, **kwargs):
+        yield page_data
+
+    paginator = mock_s3_client.get_paginator.return_value
+    paginator.paginate.return_value = async_paginate()
+
+    # delete_objects에서 예외 발생
+    async def delete_objects_side_effect(*args, **kwargs):
+        raise Exception("S3 Delete Error")
+
+    mock_s3_client.delete_objects.side_effect = delete_objects_side_effect
+
+    # 예외가 발생해야 함
+    with pytest.raises(Exception, match="S3 Delete Error"):
+        await delete_files_in_partition(
+            s3_client=mock_s3_client,
+            bucket_name="test-bucket",
+            prefix="raw/popscore/dt=2025-01-15/",
+        )
+
+    mock_s3_client.get_paginator.assert_called_once_with("list_objects_v2")
+    mock_s3_client.delete_objects.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_files_in_partition_no_files(
+    mock_s3_client: AsyncMock,
+):
+    """
+    지정된 파티션에 파일이 없을 때 삭제가 수행되지 않는지 테스트합니다.
+
+    Verifies:
+        1. S3 클라이언트의 delete_objects 메서드가 호출되지 않는지
+        2. 삭제된 파일 수가 0으로 반환되는지
+    """
+
+    async def async_paginate(*args, **kwargs):
+        # 빈 페이지 반환
+        if False:
+            yield
+
+    paginator = mock_s3_client.get_paginator.return_value
+    paginator.paginate.return_value = async_paginate()
+
+    deleted_count = await delete_files_in_partition(
+        s3_client=mock_s3_client,
+        bucket_name="test-bucket",
+        prefix="raw/popscore/dt=2025-01-15/",
+    )
+
+    mock_s3_client.get_paginator.assert_called_once_with("list_objects_v2")
+    mock_s3_client.delete_objects.assert_not_awaited()
+
+    assert deleted_count == 0
+
+
+@pytest.mark.asyncio
+async def test_move_files_atomically(
+    mock_s3_client: AsyncMock,
+):
+    """
+    S3 파일들을 원자적으로 이동하는지 테스트합니다.
+
+    Verifies:
+        1. paginator를 통해 파일 목록을 조회하는지
+        2. S3 클라이언트의 copy_object 및 delete_object 메서드가 올바르게 호출되는지
+        3. 이동된 파일 수가 올바르게 반환되는지
+    """
+    source_prefix = "raw/popscore/dt=2025-01-15/_temp_123/"
+    dest_prefix = "raw/popscore/dt=2025-01-15/"
+
+    # paginator 모킹
+    page_data = {
+        "Contents": [
+            {"Key": f"{source_prefix}batch-0.jsonl"},
+            {"Key": f"{source_prefix}batch-1.jsonl"},
+        ]
+    }
+
+    async def async_paginate(*args, **kwargs):
+        yield page_data
+
+    paginator = mock_s3_client.get_paginator.return_value
+    paginator.paginate.return_value = async_paginate()
+
+    moved_count = await move_files_atomically(
+        s3_client=mock_s3_client,
+        bucket_name="test-bucket",
+        source_prefix=source_prefix,
+        dest_prefix=dest_prefix,
+    )
+
+    mock_s3_client.get_paginator.assert_called_once_with("list_objects_v2")
+
+    expected_copy_calls = [
+        call(
+            Bucket="test-bucket",
+            CopySource={
+                "Bucket": "test-bucket",
+                "Key": f"{source_prefix}batch-0.jsonl",
+            },
+            Key=f"{dest_prefix}batch-0.jsonl",
+        ),
+        call(
+            Bucket="test-bucket",
+            CopySource={
+                "Bucket": "test-bucket",
+                "Key": f"{source_prefix}batch-1.jsonl",
+            },
+            Key=f"{dest_prefix}batch-1.jsonl",
+        ),
+    ]
+    mock_s3_client.copy_object.assert_has_calls(expected_copy_calls, any_order=True)
+
+    expected_delete_calls = [
+        call(Bucket="test-bucket", Key=f"{source_prefix}batch-0.jsonl"),
+        call(Bucket="test-bucket", Key=f"{source_prefix}batch-1.jsonl"),
+    ]
+    mock_s3_client.delete_object.assert_has_calls(expected_delete_calls, any_order=True)
+
+    assert moved_count == 2
+
+
+@pytest.mark.asyncio
+async def test_move_files_atomically_failure(
+    mock_s3_client: AsyncMock,
+):
+    """
+    S3 파일 이동 실패 시나리오를 테스트합니다.
+
+    Verifies:
+        1. 예외가 발생해도 함수가 정상 종료되는지
+    """
+    source_prefix = "raw/popscore/dt=2025-01-15/_temp_123/"
+    dest_prefix = "raw/popscore/dt=2025-01-15/"
+
+    # paginator 모킹
+    page_data = {
+        "Contents": [
+            {"Key": f"{source_prefix}batch-0.jsonl"},
+            {"Key": f"{source_prefix}batch-1.jsonl"},
+        ]
+    }
+
+    async def async_paginate(*args, **kwargs):
+        yield page_data
+
+    paginator = mock_s3_client.get_paginator.return_value
+    paginator.paginate.return_value = async_paginate()
+
+    # copy_object에서 예외 발생
+    async def copy_object_side_effect(*args, **kwargs):
+        raise Exception("S3 Copy Error")
+
+    mock_s3_client.copy_object.side_effect = copy_object_side_effect
+
+    # 예외가 발생해야 함
+    with pytest.raises(Exception, match="S3 Copy Error"):
+        await move_files_atomically(
+            s3_client=mock_s3_client,
+            bucket_name="test-bucket",
+            source_prefix=source_prefix,
+            dest_prefix=dest_prefix,
+        )
+
+    mock_s3_client.get_paginator.assert_called_once_with("list_objects_v2")
+    mock_s3_client.copy_object.assert_called_once()  # 첫 번째 호출에서 예외 발생
+    mock_s3_client.delete_object.assert_not_called()  # 삭제는 수행되지 않음

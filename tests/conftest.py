@@ -108,5 +108,8 @@ def mock_dependencies(mocker) -> dict[str, AsyncMock]:
 
 @pytest.fixture
 def mock_extractors(mocker) -> dict[str, AsyncMock]:
-    """테스트용 엔티티 'games'"""
-    return {"games": mocker.AsyncMock(spec=Extractor)}
+    """테스트용 엔티티 extractors"""
+    return {
+        "games": mocker.AsyncMock(spec=Extractor),
+        "popscore": mocker.AsyncMock(spec=Extractor),
+    }

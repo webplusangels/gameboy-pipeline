@@ -42,7 +42,7 @@ async def test_igdb_extractor_it_concurrent_fetches_real_data_static_auth():
             rate_limiter=rate_limiter,
         )
 
-        # genres는 ~24개로 적음, batch_size=4로 충분
+        # genres는 전체 ~24개로 적음 (Rate limit 우려 없음)
         results = []
         async for item in extractor.extract_concurrent(batch_size=4):
             results.append(item)

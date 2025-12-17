@@ -173,6 +173,16 @@ async def invalidate_cloudfront_cache(
     cloudfront_distribution_id: str | None,
     dt_partition: str,
 ) -> None:
+    """
+    CloudFront 캐시를 무효화합니다.
+
+    Args:
+        cloudfront_client (Any): CloudFront 클라이언트 객체.
+        cloudfront_distribution_id (str | None): CloudFront 배포 ID.
+        dt_partition (str): 날짜 파티션 문자열.
+    Returns:
+        None
+    """
     if cloudfront_distribution_id:
         logger.info("CloudFront 캐시 무효화 시작...")
         try:
@@ -202,3 +212,136 @@ async def invalidate_cloudfront_cache(
         logger.warning(
             "CloudFront Distribution ID가 설정되지 않아 캐시 무효화를 건너뜁니다."
         )
+
+
+async def delete_files_in_partition(
+    s3_client: Any,
+    bucket_name: str,
+    prefix: str,
+) -> int:
+    """
+    지정된 파티션의 모든 파일을 삭제합니다.
+    시계열 데이터의 멱등성을 보장하기 위해 같은 날짜 파티션을 재실행할 때 사용됩니다.
+
+    Args:
+        s3_client (Any): S3 클라이언트 객체
+        bucket_name (str): S3 버킷 이름
+        prefix (str): 삭제할 파일들의 접두사 (예: "raw/popscore/dt=2025-01-15/")
+
+    Returns:
+        int: 삭제된 파일 개수
+    """
+    deleted_count = 0
+    files_to_delete: list[str] = []
+
+    paginator = s3_client.get_paginator("list_objects_v2")
+
+    async for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+        if "Contents" not in page:
+            continue
+
+        for obj in page["Contents"]:
+            key = obj["Key"]
+            # _manifest.json은 제외 (나중에 업데이트됨)
+            # _temp_ 디렉토리도 제외 (atomic replacement 중)
+            if not key.endswith("_manifest.json") and "/_temp_" not in key:
+                files_to_delete.append(key)
+
+    if not files_to_delete:
+        logger.info(f"삭제할 파일이 없습니다: {prefix}")
+        return 0
+
+    logger.info(f"파티션 내 파일 {len(files_to_delete)}개 삭제 시작: {prefix}")
+
+    # S3 batch delete (최대 1000개씩)
+    for i in range(0, len(files_to_delete), 1000):
+        batch = files_to_delete[i : i + 1000]
+        try:
+            await s3_client.delete_objects(
+                Bucket=bucket_name,
+                Delete={
+                    "Objects": [{"Key": key} for key in batch],
+                    "Quiet": True,
+                },
+            )
+            deleted_count += len(batch)
+        except Exception as e:
+            logger.error(f"파일 삭제 중 오류 발생: {e}")
+            raise
+
+    logger.info(f"파티션 내 파일 {deleted_count}개 삭제 완료: {prefix}")
+    return deleted_count
+
+
+async def move_files_atomically(
+    s3_client: Any,
+    bucket_name: str,
+    source_prefix: str,
+    dest_prefix: str,
+) -> int:
+    """
+    temp 디렉토리에서 본 디렉토리로 파일들을 이동합니다.
+
+    Args:
+        s3_client (Any): S3 클라이언트 객체
+        bucket_name (str): S3 버킷 이름
+        source_prefix (str): 소스 경로 접두사 (예: "raw/popscore/dt=2025-01-15/_temp_abc/")
+        dest_prefix (str): 목적지 경로 접두사 (예: "raw/popscore/dt=2025-01-15/")
+
+    Returns:
+        int: 이동된 파일 개수
+    """
+    import asyncio
+
+    moved_count = 0
+    paginator = s3_client.get_paginator("list_objects_v2")
+
+    async for page in paginator.paginate(Bucket=bucket_name, Prefix=source_prefix):
+        if "Contents" not in page:
+            continue
+
+        for obj in page["Contents"]:
+            source_key = obj["Key"]
+            # source_prefix를 dest_prefix로 교체
+            relative_path = source_key[len(source_prefix) :]
+            dest_key = dest_prefix + relative_path
+
+            # S3 eventual consistency를 위한 재시도 로직
+            max_retries = 5
+            for retry in range(max_retries):
+                try:
+                    # Copy
+                    await s3_client.copy_object(
+                        Bucket=bucket_name,
+                        CopySource={"Bucket": bucket_name, "Key": source_key},
+                        Key=dest_key,
+                    )
+
+                    # Delete source
+                    await s3_client.delete_object(
+                        Bucket=bucket_name,
+                        Key=source_key,
+                    )
+
+                    moved_count += 1
+                    break  # Success, exit retry loop
+
+                except s3_client.exceptions.NoSuchKey:
+                    if retry < max_retries - 1:
+                        wait_time = 2**retry  # Exponential backoff: 1s, 2s, 4s, 8s, 16s
+                        logger.warning(
+                            f"NoSuchKey for {source_key}, retrying in {wait_time}s... (attempt {retry + 1}/{max_retries})"
+                        )
+                        await asyncio.sleep(wait_time)
+                    else:
+                        logger.error(
+                            f"파일 이동 실패 (NoSuchKey after {max_retries} retries): {source_key} -> {dest_key}"
+                        )
+                        raise
+
+                except Exception as e:
+                    logger.error(f"파일 이동 실패: {source_key} -> {dest_key}: {e}")
+                    raise
+
+    logger.info(f"{moved_count}개 파일을 {source_prefix}에서 {dest_prefix}로 이동 완료")
+    return moved_count
