@@ -5,7 +5,9 @@ EXECUTION_ORDER = [
     "game_modes",
     "themes",
     "player_perspectives",
-    "games",  # 마지막
+    "games",
+    "popscore",
+    "popularity_types",
 ]
 
 DIMENSION_ENTITIES = {
@@ -14,6 +16,7 @@ DIMENSION_ENTITIES = {
     "game_modes",
     "themes",
     "player_perspectives",
+    "popularity_types",
 }
 
 FACT_ENTITIES = {
