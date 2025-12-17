@@ -5,7 +5,7 @@
     {{ exceptions.raise_compiler_error("CLOUDFRONT_DOMAIN 환경 변수가 설정되지 않았습니다. .env 파일을 확인하세요.") }}
 {%- endif -%}
 
-{%- set latest_partition_query = "SELECT DISTINCT regexp_extract(filename, 'dt=([0-9]{4}-[0-9]{2}-[0-9]{2})/', 1) AS dt FROM glob('s3://" ~ env_var('S3_BUCKET_NAME') ~ "/raw/" ~ entity_name ~ "/dt=*/*.jsonl') ORDER BY dt DESC LIMIT 1" -%}
+{%- set latest_partition_query = "SELECT DISTINCT regexp_extract(file, 'dt=([0-9]{4}-[0-9]{2}-[0-9]{2})/', 1) AS dt FROM glob('s3://" ~ env_var('S3_BUCKET_NAME') ~ "/raw/" ~ entity_name ~ "/dt=*/*.jsonl') ORDER BY dt DESC LIMIT 1" -%}
 
 {%- if execute -%}
     {%- set result = run_query(latest_partition_query) -%}
