@@ -8,6 +8,7 @@ from src.config import settings
 from src.pipeline.auth import StaticAuthProvider
 from src.pipeline.loaders import S3Loader
 from src.pipeline.orchestrator import PipelineOrchestrator
+from src.pipeline.rate_limiter import IgdbRateLimiter
 from src.pipeline.registry import ALL_ENTITIES
 from src.pipeline.s3_ops import create_clients
 from src.pipeline.state import S3StateManager
@@ -51,10 +52,19 @@ async def main(full_refresh: bool = False, target_date: str | None = None) -> No
 
     auth_provider = StaticAuthProvider(token=static_token)
 
+    # Rate limiter 생성 (IGDB API 속도 제한 준수)
+    rate_limiter = IgdbRateLimiter(
+        requests_per_second=3.2,  # IGDB 제한: 4 req/sec (안전 마진 포함)
+        max_concurrency=4,  # 동시 요청 제한
+    )
+
     async with create_clients() as (http_client, s3_client, cloudfront_client):
         extractors = {
             entity_name: entity_extractor(
-                client=http_client, auth_provider=auth_provider, client_id=client_id
+                client=http_client,
+                auth_provider=auth_provider,
+                client_id=client_id,
+                rate_limiter=rate_limiter,
             )
             for entity_name, entity_extractor in ALL_ENTITIES.items()
         }
