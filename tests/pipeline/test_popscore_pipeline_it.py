@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import aioboto3
@@ -88,14 +89,28 @@ async def test_popscore_pipeline_e2e_with_temp_directory(s3_client):
             print(f"Total batches created: {len(batches)}")
             assert len(batches) == 3  # 100, 100, 50
 
-            # === 2. Verify Temp Files ===
+            # === 2. Verify Temp Files (with retry for eventual consistency) ===
             paginator = s3_client.get_paginator("list_objects_v2")
             temp_files = []
-            async for page in paginator.paginate(
-                Bucket=bucket_name, Prefix=temp_prefix
-            ):
-                if "Contents" in page:
-                    temp_files.extend([obj["Key"] for obj in page["Contents"]])
+
+            # Retry logic for S3 eventual consistency
+            max_retries = 5
+            for retry in range(max_retries):
+                temp_files = []
+                async for page in paginator.paginate(
+                    Bucket=bucket_name, Prefix=temp_prefix
+                ):
+                    if "Contents" in page:
+                        temp_files.extend([obj["Key"] for obj in page["Contents"]])
+
+                if len(temp_files) == 3:
+                    break
+
+                if retry < max_retries - 1:
+                    print(
+                        f"Retry {retry + 1}: Temp files found: {len(temp_files)}, waiting..."
+                    )
+                    await asyncio.sleep(1)  # Wait 1 second before retry
 
             print(f"Temp files found: {len(temp_files)}")
             for f in temp_files:
@@ -218,6 +233,9 @@ async def test_popscore_idempotency_with_same_date_rerun(s3_client):
                 batches.append(batch_key)
                 await loader.load(data=batch_data, key=batch_key)
 
+            # Wait for S3 eventual consistency
+            await asyncio.sleep(2)
+
             await delete_files_in_partition(
                 s3_client=s3_client,
                 bucket_name=bucket_name,
@@ -259,6 +277,9 @@ async def test_popscore_idempotency_with_same_date_rerun(s3_client):
                 batch_key = f"{temp_prefix_2}batch-{batch_num}.jsonl"
                 batches_2.append(batch_key)
                 await loader.load(data=batch_data, key=batch_key)
+
+            # Wait for S3 eventual consistency
+            await asyncio.sleep(2)
 
             await delete_files_in_partition(
                 s3_client=s3_client,
