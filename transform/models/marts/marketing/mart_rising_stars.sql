@@ -33,7 +33,7 @@ FROM {{ ref('dim_games') }} g
 INNER JOIN popularity_metrics p ON g.game_id = p.game_id
 WHERE p.cross_platform_score >= 2  -- 최소 2개 플랫폼 이상
   AND p.steam_positive_ratio >= 0.75  -- Steam 긍정률 75% 이상
-  AND p.steam_total_reviews >= 50  -- 최소 50개 이상의 리뷰
+  AND p.steam_total_reviews >= 0.0001  -- 최소 임계값 이상의 리뷰 (정규화된 점수)
   AND p.igdb_total_engagement > 0  -- IGDB 참여도 있음
 ORDER BY p.cross_platform_score DESC, p.steam_positive_ratio DESC, p.igdb_total_engagement DESC
 LIMIT 100

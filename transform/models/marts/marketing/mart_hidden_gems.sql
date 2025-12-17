@@ -31,8 +31,8 @@ SELECT
 FROM {{ ref('dim_games') }} g
 INNER JOIN popularity_metrics p ON g.game_id = p.game_id
 WHERE p.steam_positive_ratio >= 0.85  -- 매우 높은 긍정률
-  AND p.steam_total_reviews BETWEEN 10 AND 500  -- 적당한 리뷰 수 (숨어있음)
-  AND p.igdb_total_engagement < 1000  -- IGDB에서 낮은 인지도
+  AND p.steam_total_reviews BETWEEN 0.00005 AND 0.001  -- 적당한 리뷰 수 (숨어있음, 정규화된 점수)
+  AND p.igdb_total_engagement < 0.01  -- IGDB에서 낮은 인지도 (정규화된 점수)
   AND p.steam_controversy_ratio < 0.20  -- 낮은 논란도
 ORDER BY p.steam_positive_ratio DESC, p.steam_total_reviews ASC
 LIMIT 100

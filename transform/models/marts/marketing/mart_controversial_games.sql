@@ -32,7 +32,7 @@ SELECT
 FROM {{ ref('dim_games') }} g
 INNER JOIN popularity_metrics p ON g.game_id = p.game_id
 WHERE p.steam_controversy_ratio IS NOT NULL
-  AND p.steam_total_reviews >= 100  -- 최소 100개 이상의 리뷰
+  AND p.steam_total_reviews >= 0.0001  -- 최소 임계값 이상의 리뷰 (정규화된 점수)
   AND p.steam_controversy_ratio >= 0.30  -- 부정률 30% 이상
 ORDER BY p.steam_controversy_ratio DESC, p.steam_total_reviews DESC
 LIMIT 100

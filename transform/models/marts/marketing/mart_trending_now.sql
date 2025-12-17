@@ -32,7 +32,7 @@ SELECT
 FROM {{ ref('dim_games') }} g
 INNER JOIN popularity_metrics p ON g.game_id = p.game_id
 WHERE p.engagement_velocity IS NOT NULL
-  AND p.played >= 100  -- 최소 100명 이상 플레이한 게임
+  AND p.played >= 0.0001  -- 최소 임계값 이상 플레이한 게임 (정규화된 점수)
   AND p.engagement_velocity > 0.01  -- 최소 1% 이상의 velocity
 ORDER BY p.engagement_velocity DESC, p.playing DESC
 LIMIT 100
