@@ -334,3 +334,73 @@ class IgdbThemeExtractor(BaseIgdbExtractor):
     @property
     def api_url(self) -> str:
         return "https://api.igdb.com/v4/themes"
+
+
+# PopScore Extractor
+class IgdbPopScoreExtractor(BaseIgdbExtractor):
+    """IGDB API로부터 인기 점수 데이터를 추출하는 Extractor 구현체."""
+
+    @property
+    def api_url(self) -> str:
+        return "https://api.igdb.com/v4/popularity_primitives"
+
+    @property
+    def base_query(self) -> str:
+        """
+        Popularity Types:
+        1: Visits (조회수)
+        2: Want to Play (기대 지수)
+        3: Playing (현재 플레이 중)
+        4: Played (플레이 한 적 있음)
+        5: Steam 24hr Peak (실질 인기도)
+        6: Steam Positive Reviews (긍정 여론)
+        7: Steam Negative Reviews (부정 여론)
+        8: Steam Total Reviews (전체 리뷰 수)
+        """
+        target_types = (1, 2, 3, 4, 5, 6, 7, 8)
+        return f"fields game_id, popularity_type, value; where popularity_type = {target_types}; sort id asc;"
+
+    async def extract(
+        self, last_updated_at: datetime | None = None
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """
+        IGDB API에서 데이터를 추출합니다.
+
+        Args:
+            last_updated_at: 증분 추출을 위한 마지막 업데이트 시간 (없으면 전체 추출)
+
+        Yields:
+            dict[str, Any]: 데이터 제너레이터 객체
+        """
+        # PopScore는 증분 추출을 지원하지 않음
+        if last_updated_at:
+            logger.warning(
+                "IgdbPopScoreExtractor는 증분 추출을 지원하지 않습니다. 전체 추출을 수행합니다."
+            )
+
+        async for item in super().extract(last_updated_at=None):
+            yield item
+
+    async def extract_concurrent(
+        self, last_updated_at: datetime | None = None, batch_size: int = 8
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """
+        IGDB API에서 데이터를 병렬로 추출합니다.
+
+        Args:
+            last_updated_at: 증분 추출을 위한 마지막 업데이트 시간 (없으면 전체 추출)
+            batch_size: 동시 요청할 페이지 수
+
+        Yields:
+            dict[str, Any]: 데이터 제너레이터 객체
+        """
+        # PopScore는 증분 추출을 지원하지 않음
+        if last_updated_at:
+            logger.warning(
+                "IgdbPopScoreExtractor는 증분 추출을 지원하지 않습니다. 전체 추출을 수행합니다."
+            )
+
+        async for item in super().extract_concurrent(
+            last_updated_at=None, batch_size=batch_size
+        ):
+            yield item
