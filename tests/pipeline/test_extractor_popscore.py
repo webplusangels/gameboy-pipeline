@@ -93,6 +93,6 @@ async def test_popscore_extractor_query_format(
 
     query = extractor.base_query
 
-    expected_types = "1, 2, 3, 4, 5, 6, 7, 8"
-    assert expected_types in query
+    # 11개 popularity type 모두 포함 확인
+    assert "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 34" in query
     assert "fields game_id, popularity_type, value" in query
