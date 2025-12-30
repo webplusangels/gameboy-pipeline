@@ -214,6 +214,7 @@ uv run streamlit run dashboard/app.py
 - [03. 학습 기록](./docs/03_Learning_Log.md)
 - [04. 성능 측정](./docs/04_Performance.md)
 - [05. 데이터 모델](./docs/05_Data_Model.md)
+- [07. 비동기 병렬 수집기 구현](./docs/07_Async_Parallel_Collection.md)
 - [개발 방식](./CONTRIBUTING.md)
 
 ## 타임라인
