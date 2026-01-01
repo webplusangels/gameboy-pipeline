@@ -252,8 +252,35 @@ async def test_popscore_idempotency_with_same_date_rerun(s3_client):
                 batches.append(batch_key)
                 await loader.load(data=batch_data, key=batch_key)
 
-            # Wait for S3 eventual consistency (increased for cross-version stability)
-            await asyncio.sleep(3)
+            # Verify temp files are visible with retry (for S3 eventual consistency)
+            paginator = s3_client.get_paginator("list_objects_v2")
+            expected_batch_count = len(batches)
+            max_verify_retries = 10
+            temp_files_visible = False
+
+            for retry in range(max_verify_retries):
+                temp_files = []
+                async for page in paginator.paginate(
+                    Bucket=bucket_name, Prefix=temp_prefix_1
+                ):
+                    if "Contents" in page:
+                        temp_files.extend([obj["Key"] for obj in page["Contents"]])
+
+                if len(temp_files) == expected_batch_count:
+                    temp_files_visible = True
+                    break
+
+                if retry < max_verify_retries - 1:
+                    wait_time = min(2**retry, 8)  # Cap at 8 seconds
+                    print(
+                        f"Temp file verify retry {retry + 1}/{max_verify_retries}: {len(temp_files)}/{expected_batch_count} files visible, waiting {wait_time}s..."
+                    )
+                    await asyncio.sleep(wait_time)
+
+            if not temp_files_visible:
+                raise AssertionError(
+                    f"Temp files not visible after {max_verify_retries} retries. Expected {expected_batch_count}, found {len(temp_files)}"
+                )
 
             await delete_files_in_partition(
                 s3_client=s3_client,
@@ -327,8 +354,34 @@ async def test_popscore_idempotency_with_same_date_rerun(s3_client):
                 batches_2.append(batch_key)
                 await loader.load(data=batch_data, key=batch_key)
 
-            # Wait for S3 eventual consistency (increased for cross-version stability)
-            await asyncio.sleep(3)
+            # Verify temp files are visible with retry (for S3 eventual consistency)
+            expected_batch_count = len(batches_2)
+            max_verify_retries = 10
+            temp_files_visible = False
+
+            for retry in range(max_verify_retries):
+                temp_files = []
+                async for page in paginator.paginate(
+                    Bucket=bucket_name, Prefix=temp_prefix_2
+                ):
+                    if "Contents" in page:
+                        temp_files.extend([obj["Key"] for obj in page["Contents"]])
+
+                if len(temp_files) == expected_batch_count:
+                    temp_files_visible = True
+                    break
+
+                if retry < max_verify_retries - 1:
+                    wait_time = min(2**retry, 8)  # Cap at 8 seconds
+                    print(
+                        f"Temp file verify retry {retry + 1}/{max_verify_retries}: {len(temp_files)}/{expected_batch_count} files visible, waiting {wait_time}s..."
+                    )
+                    await asyncio.sleep(wait_time)
+
+            if not temp_files_visible:
+                raise AssertionError(
+                    f"Temp files not visible after {max_verify_retries} retries. Expected {expected_batch_count}, found {len(temp_files)}"
+                )
 
             await delete_files_in_partition(
                 s3_client=s3_client,
