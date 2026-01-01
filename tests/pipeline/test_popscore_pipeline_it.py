@@ -283,20 +283,35 @@ async def test_popscore_idempotency_with_same_date_rerun(s3_client):
                     )
                     await asyncio.sleep(wait_time)
 
-            # 첫 번째 실행 후 파일 목록 저장
+            # 첫 번째 실행 후 파일 목록 저장 (with retry for S3 consistency)
             paginator = s3_client.get_paginator("list_objects_v2")
             first_run_files = []
-            async for page in paginator.paginate(
-                Bucket=bucket_name, Prefix=final_prefix
-            ):
-                if "Contents" in page:
-                    first_run_files.extend(
-                        [
-                            obj["Key"]
-                            for obj in page["Contents"]
-                            if "/_temp_" not in obj["Key"]
-                        ]
+            max_list_retries = 5
+            expected_file_count = moved_count_1
+
+            for retry in range(max_list_retries):
+                first_run_files = []
+                async for page in paginator.paginate(
+                    Bucket=bucket_name, Prefix=final_prefix
+                ):
+                    if "Contents" in page:
+                        first_run_files.extend(
+                            [
+                                obj["Key"]
+                                for obj in page["Contents"]
+                                if "/_temp_" not in obj["Key"]
+                            ]
+                        )
+
+                if len(first_run_files) == expected_file_count:
+                    break
+
+                if retry < max_list_retries - 1:
+                    wait_time = 2**retry
+                    print(
+                        f"List retry {retry + 1}/{max_list_retries}: {len(first_run_files)} files found (expected {expected_file_count}), waiting {wait_time}s..."
                     )
+                    await asyncio.sleep(wait_time)
 
             first_run_files.sort()
 
@@ -343,19 +358,34 @@ async def test_popscore_idempotency_with_same_date_rerun(s3_client):
                     )
                     await asyncio.sleep(wait_time)
 
-            # 두 번째 실행 후 파일 목록 저장
+            # 두 번째 실행 후 파일 목록 저장 (with retry for S3 consistency)
             second_run_files = []
-            async for page in paginator.paginate(
-                Bucket=bucket_name, Prefix=final_prefix
-            ):
-                if "Contents" in page:
-                    second_run_files.extend(
-                        [
-                            obj["Key"]
-                            for obj in page["Contents"]
-                            if "/_temp_" not in obj["Key"]
-                        ]
+            max_list_retries = 5
+            expected_file_count = moved_count_2
+
+            for retry in range(max_list_retries):
+                second_run_files = []
+                async for page in paginator.paginate(
+                    Bucket=bucket_name, Prefix=final_prefix
+                ):
+                    if "Contents" in page:
+                        second_run_files.extend(
+                            [
+                                obj["Key"]
+                                for obj in page["Contents"]
+                                if "/_temp_" not in obj["Key"]
+                            ]
+                        )
+
+                if len(second_run_files) == expected_file_count:
+                    break
+
+                if retry < max_list_retries - 1:
+                    wait_time = 2**retry
+                    print(
+                        f"List retry {retry + 1}/{max_list_retries}: {len(second_run_files)} files found (expected {expected_file_count}), waiting {wait_time}s..."
                     )
+                    await asyncio.sleep(wait_time)
 
             second_run_files.sort()
 
