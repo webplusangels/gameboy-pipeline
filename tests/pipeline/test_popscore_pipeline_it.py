@@ -134,15 +134,29 @@ async def test_popscore_pipeline_e2e_with_temp_directory(s3_client):
                 prefix=final_prefix,
             )
 
-            # === 4. Move Files Atomically ===
-            moved_count = await move_files_atomically(
-                s3_client=s3_client,
-                bucket_name=bucket_name,
-                source_prefix=temp_prefix,
-                dest_prefix=final_prefix,
-            )
+            # === 4. Move Files Atomically (with retry for S3 consistency) ===
+            max_move_retries = 5
+            moved_count = 0
 
-            assert moved_count == 3
+            for retry in range(max_move_retries):
+                moved_count = await move_files_atomically(
+                    s3_client=s3_client,
+                    bucket_name=bucket_name,
+                    source_prefix=temp_prefix,
+                    dest_prefix=final_prefix,
+                )
+
+                if moved_count == 3:
+                    break
+
+                if retry < max_move_retries - 1:
+                    wait_time = 2**retry  # 1s, 2s, 4s, 8s, 16s
+                    print(
+                        f"Move retry {retry + 1}/{max_move_retries}: {moved_count} files moved, waiting {wait_time}s..."
+                    )
+                    await asyncio.sleep(wait_time)
+
+            assert moved_count == 3, f"Expected 3 files moved, got {moved_count}"
 
             # === 5. Verify Final Files ===
             final_files = []
@@ -247,12 +261,27 @@ async def test_popscore_idempotency_with_same_date_rerun(s3_client):
                 prefix=final_prefix,
             )
 
-            moved_count_1 = await move_files_atomically(
-                s3_client=s3_client,
-                bucket_name=bucket_name,
-                source_prefix=temp_prefix_1,
-                dest_prefix=final_prefix,
-            )
+            # Move files with retry for S3 consistency
+            max_move_retries = 5
+            moved_count_1 = 0
+
+            for retry in range(max_move_retries):
+                moved_count_1 = await move_files_atomically(
+                    s3_client=s3_client,
+                    bucket_name=bucket_name,
+                    source_prefix=temp_prefix_1,
+                    dest_prefix=final_prefix,
+                )
+
+                if moved_count_1 > 0:
+                    break
+
+                if retry < max_move_retries - 1:
+                    wait_time = 2**retry
+                    print(
+                        f"Move retry {retry + 1}/{max_move_retries}: {moved_count_1} files moved, waiting {wait_time}s..."
+                    )
+                    await asyncio.sleep(wait_time)
 
             # 첫 번째 실행 후 파일 목록 저장
             paginator = s3_client.get_paginator("list_objects_v2")
@@ -292,12 +321,27 @@ async def test_popscore_idempotency_with_same_date_rerun(s3_client):
                 prefix=final_prefix,
             )
 
-            moved_count_2 = await move_files_atomically(
-                s3_client=s3_client,
-                bucket_name=bucket_name,
-                source_prefix=temp_prefix_2,
-                dest_prefix=final_prefix,
-            )
+            # Move files with retry for S3 consistency
+            max_move_retries = 5
+            moved_count_2 = 0
+
+            for retry in range(max_move_retries):
+                moved_count_2 = await move_files_atomically(
+                    s3_client=s3_client,
+                    bucket_name=bucket_name,
+                    source_prefix=temp_prefix_2,
+                    dest_prefix=final_prefix,
+                )
+
+                if moved_count_2 > 0:
+                    break
+
+                if retry < max_move_retries - 1:
+                    wait_time = 2**retry
+                    print(
+                        f"Move retry {retry + 1}/{max_move_retries}: {moved_count_2} files moved, waiting {wait_time}s..."
+                    )
+                    await asyncio.sleep(wait_time)
 
             # 두 번째 실행 후 파일 목록 저장
             second_run_files = []
