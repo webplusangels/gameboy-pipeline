@@ -8,10 +8,21 @@
 }}
 
 -- 💎 숨은 보석 게임 (낮은 인지도 + 높은 품질)
--- 상대적으로 덜 알려졌지만 플레이한 사람들의 평가가 매우 좋은 게임
+-- 복합 점수로 진짜 "숨은 명작"을 발굴
+-- Steam 품질 + IGDB 평론가 점수를 결합하여 차별화
 
 WITH popularity_metrics AS (
     SELECT * FROM {{ ref('fct_game_popularity') }}
+),
+
+percentiles AS (
+    SELECT 
+        *,
+        NTILE(100) OVER (ORDER BY steam_total_reviews) AS review_percentile,
+        NTILE(100) OVER (ORDER BY igdb_total_engagement) AS engagement_percentile
+    FROM popularity_metrics
+    WHERE steam_total_reviews IS NOT NULL
+      AND steam_positive_ratio IS NOT NULL
 )
 
 SELECT
@@ -22,6 +33,12 @@ SELECT
     p.engagement_velocity,
     p.cross_platform_score,
     g.aggregated_rating,
+    g.aggregated_rating_count,
+    -- 복합 품질 점수: Steam 사용자 평가 + IGDB 평론가 평가
+    (
+        p.steam_positive_ratio * 100 * 0.6 +  -- Steam 긍정률 (60% 가중치)
+        COALESCE(g.aggregated_rating, 75) * 0.4  -- IGDB 평점 (40% 가중치, 없으면 75점 가정)
+    ) AS quality_score,
     g.platform_names,
     g.genre_names,
     g.first_release_date,
@@ -29,10 +46,18 @@ SELECT
     g.cover,
     g.url
 FROM {{ ref('dim_games') }} g
-INNER JOIN popularity_metrics p ON g.game_id = p.game_id
-WHERE p.steam_positive_ratio >= 0.85  -- 매우 높은 긍정률
-  AND p.steam_total_reviews BETWEEN 0.00005 AND 0.001  -- 적당한 리뷰 수 (숨어있음, 정규화된 점수)
-  AND p.igdb_total_engagement < 0.01  -- IGDB에서 낮은 인지도 (정규화된 점수)
-  AND p.steam_controversy_ratio < 0.20  -- 낮은 논란도
-ORDER BY p.steam_positive_ratio DESC, p.steam_total_reviews ASC
+INNER JOIN percentiles p ON g.game_id = p.game_id
+WHERE p.steam_positive_ratio >= 0.80  -- 높은 긍정률 (80% 이상, 범위 확대)
+  AND p.steam_positive_ratio <= 0.95  -- 너무 완벽하지 않음 (다양성 확보)
+  AND p.review_percentile <= 40  -- 하위 40% 리뷰 수 (적은 리뷰 = 숨어있음)
+  AND p.engagement_percentile <= 30  -- 하위 30% IGDB 참여도 (낮은 인지도)
+  AND COALESCE(p.steam_controversy_ratio, 0) < 0.25  -- 낮은 논란도 (약간 완화)
+  AND (
+      g.aggregated_rating IS NULL  -- 평론가 평가 없음 (진짜 숨은 게임) OR
+      OR g.aggregated_rating >= 75  -- 평론가도 인정하는 품질
+  )
+ORDER BY 
+    quality_score DESC,  -- 복합 품질 점수 우선
+    p.review_percentile ASC,  -- 더 숨어있을수록 우선
+    g.aggregated_rating DESC  -- IGDB 평점 높을수록 우선
 LIMIT 100
