@@ -8,70 +8,73 @@
 
 WITH popscore AS (
     SELECT * FROM {{ ref('stg_popscore') }}
+),
+
+base_metrics AS (
+    SELECT
+        game_id,
+        
+        -- IGDB User Engagement Metrics
+        MAX(CASE WHEN popularity_type = 1 THEN value END) AS visits,
+        MAX(CASE WHEN popularity_type = 2 THEN value END) AS want_to_play,
+        MAX(CASE WHEN popularity_type = 3 THEN value END) AS playing,
+        MAX(CASE WHEN popularity_type = 4 THEN value END) AS played,
+        
+        -- Steam Performance Metrics (normalized values from IGDB API)
+        MAX(CASE WHEN popularity_type = 5 THEN value END) AS steam_24hr_peak_players,
+        MAX(CASE WHEN popularity_type = 6 THEN value END) AS steam_positive_reviews,
+        MAX(CASE WHEN popularity_type = 7 THEN value END) AS steam_negative_reviews,
+        MAX(CASE WHEN popularity_type = 8 THEN value END) AS steam_total_reviews,
+        
+        -- Steam Commercial Metrics
+        MAX(CASE WHEN popularity_type = 9 THEN value END) AS steam_global_top_sellers,
+        MAX(CASE WHEN popularity_type = 10 THEN value END) AS steam_most_wishlisted,
+        
+        -- Streaming Metrics
+        MAX(CASE WHEN popularity_type = 34 THEN value END) AS twitch_24hr_hours_watched,
+        
+        -- IGDB 참여도 합계
+        COALESCE(MAX(CASE WHEN popularity_type = 1 THEN value END), 0) +
+        COALESCE(MAX(CASE WHEN popularity_type = 2 THEN value END), 0) +
+        COALESCE(MAX(CASE WHEN popularity_type = 3 THEN value END), 0) +
+        COALESCE(MAX(CASE WHEN popularity_type = 4 THEN value END), 0) AS igdb_total_engagement,
+        
+        -- 데이터 소스 플래그
+        MAX(CASE WHEN popularity_type IN (1, 2, 3, 4) THEN 1 ELSE 0 END) AS has_igdb_data,
+        MAX(CASE WHEN popularity_type IN (5, 6, 7, 8, 9, 10) THEN 1 ELSE 0 END) AS has_steam_data,
+        MAX(CASE WHEN popularity_type = 34 THEN 1 ELSE 0 END) AS has_twitch_data,
+        
+        -- 사용 가능한 지표 개수
+        COUNT(DISTINCT popularity_type) AS available_metrics_count,
+        
+        -- 📊 멀티플랫폼 인기도 (0-3)
+        (CASE WHEN MAX(CASE WHEN popularity_type IN (1, 2, 3, 4) THEN 1 ELSE 0 END) = 1 THEN 1 ELSE 0 END +
+         CASE WHEN MAX(CASE WHEN popularity_type IN (5, 6, 7, 8, 9, 10) THEN 1 ELSE 0 END) = 1 THEN 1 ELSE 0 END +
+         CASE WHEN MAX(CASE WHEN popularity_type = 34 THEN 1 ELSE 0 END) = 1 THEN 1 ELSE 0 END) AS cross_platform_score
+    FROM popscore
+    GROUP BY game_id
 )
 
 SELECT
-    game_id,
+    *,
     
-    -- IGDB User Engagement Metrics
-    MAX(CASE WHEN popularity_type = 1 THEN value END) AS visits,
-    MAX(CASE WHEN popularity_type = 2 THEN value END) AS want_to_play,
-    MAX(CASE WHEN popularity_type = 3 THEN value END) AS playing,
-    MAX(CASE WHEN popularity_type = 4 THEN value END) AS played,
+    -- Percentile Rankings (이미 정규화된 값을 기준으로 순위화)
+    -- Steam positive reviews가 많을수록 높은 percentile
+    NTILE(100) OVER (ORDER BY COALESCE(steam_positive_reviews, 0)) AS positive_reviews_percentile,
     
-    -- Steam Performance Metrics
-    MAX(CASE WHEN popularity_type = 5 THEN value END) AS steam_24hr_peak_players,
-    MAX(CASE WHEN popularity_type = 6 THEN value END) AS steam_positive_reviews,
-    MAX(CASE WHEN popularity_type = 7 THEN value END) AS steam_negative_reviews,
-    MAX(CASE WHEN popularity_type = 8 THEN value END) AS steam_total_reviews,
+    -- Steam negative reviews가 많을수록 높은 percentile (논란 많음)
+    NTILE(100) OVER (ORDER BY COALESCE(steam_negative_reviews, 0)) AS negative_reviews_percentile,
     
-    -- Steam Commercial Metrics
-    MAX(CASE WHEN popularity_type = 9 THEN value END) AS steam_global_top_sellers,
-    MAX(CASE WHEN popularity_type = 10 THEN value END) AS steam_most_wishlisted,
+    -- Steam total reviews가 많을수록 높은 percentile
+    NTILE(100) OVER (ORDER BY COALESCE(steam_total_reviews, 0)) AS total_reviews_percentile,
     
-    -- Streaming Metrics
-    MAX(CASE WHEN popularity_type = 34 THEN value END) AS twitch_24hr_hours_watched,
+    -- IGDB total engagement가 높을수록 높은 percentile
+    NTILE(100) OVER (ORDER BY igdb_total_engagement) AS engagement_percentile,
     
-    -- Derived Metrics
-    -- Steam 리뷰 긍정률
-    CASE 
-        WHEN MAX(CASE WHEN popularity_type = 8 THEN value END) > 0 
-        THEN MAX(CASE WHEN popularity_type = 6 THEN value END) / MAX(CASE WHEN popularity_type = 8 THEN value END)
-        ELSE NULL 
-    END AS steam_positive_ratio,
+    -- Playing activity가 높을수록 높은 percentile
+    NTILE(100) OVER (ORDER BY COALESCE(playing, 0)) AS playing_percentile,
     
-    -- IGDB 참여도 합계 (Visits + Want to Play + Playing + Played)
-    COALESCE(MAX(CASE WHEN popularity_type = 1 THEN value END), 0) +
-    COALESCE(MAX(CASE WHEN popularity_type = 2 THEN value END), 0) +
-    COALESCE(MAX(CASE WHEN popularity_type = 3 THEN value END), 0) +
-    COALESCE(MAX(CASE WHEN popularity_type = 4 THEN value END), 0) AS igdb_total_engagement,
-    
-    -- 🔥 현재 활발도 (Playing / Played): 얼마나 지금 활발한 게임인지
-    CASE 
-        WHEN MAX(CASE WHEN popularity_type = 4 THEN value END) > 0 
-        THEN MAX(CASE WHEN popularity_type = 3 THEN value END) / MAX(CASE WHEN popularity_type = 4 THEN value END)
-        ELSE NULL 
-    END AS engagement_velocity,
-    
-    -- 🎮 Steam 논란도 (Negative / Total): 부정 리뷰 비율 (낮을수록 좋음)
-    CASE 
-        WHEN MAX(CASE WHEN popularity_type = 8 THEN value END) > 0 
-        THEN MAX(CASE WHEN popularity_type = 7 THEN value END) / MAX(CASE WHEN popularity_type = 8 THEN value END)
-        ELSE NULL 
-    END AS steam_controversy_ratio,
-    
-    -- 📊 멀티플랫폼 인기도 (0-3): 여러 플랫폼에서 데이터가 있으면 더 신뢰도 높음
-    (CASE WHEN MAX(CASE WHEN popularity_type IN (1, 2, 3, 4) THEN 1 ELSE 0 END) = 1 THEN 1 ELSE 0 END +
-     CASE WHEN MAX(CASE WHEN popularity_type IN (5, 6, 7, 8, 9, 10) THEN 1 ELSE 0 END) = 1 THEN 1 ELSE 0 END +
-     CASE WHEN MAX(CASE WHEN popularity_type = 34 THEN 1 ELSE 0 END) = 1 THEN 1 ELSE 0 END) AS cross_platform_score,
-    
-    -- 사용 가능한 지표 개수 (데이터 풍부도)
-    COUNT(DISTINCT popularity_type) AS available_metrics_count,
-    
-    -- 데이터 소스 플래그
-    MAX(CASE WHEN popularity_type IN (1, 2, 3, 4) THEN 1 ELSE 0 END) AS has_igdb_data,
-    MAX(CASE WHEN popularity_type IN (5, 6, 7, 8, 9, 10) THEN 1 ELSE 0 END) AS has_steam_data,
-    MAX(CASE WHEN popularity_type = 34 THEN 1 ELSE 0 END) AS has_twitch_data
+    -- Played activity가 높을수록 높은 percentile
+    NTILE(100) OVER (ORDER BY COALESCE(played, 0)) AS played_percentile
 
-FROM popscore
-GROUP BY game_id
+FROM base_metrics

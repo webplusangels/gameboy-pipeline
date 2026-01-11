@@ -12,24 +12,19 @@
 
 WITH popularity_metrics AS (
     SELECT * FROM {{ ref('fct_game_popularity') }}
-),
-
-review_percentiles AS (
-    SELECT 
-        *,
-        NTILE(100) OVER (ORDER BY steam_total_reviews) AS review_percentile,
-        NTILE(100) OVER (ORDER BY COALESCE(engagement_velocity, 0)) AS velocity_percentile
-    FROM popularity_metrics
-    WHERE steam_total_reviews IS NOT NULL
+    WHERE steam_positive_reviews IS NOT NULL
+      AND steam_total_reviews IS NOT NULL
 )
 
 SELECT
     g.game_name,
     p.cross_platform_score,
-    p.steam_positive_ratio,
+    p.steam_positive_reviews,
     p.steam_total_reviews,
+    p.positive_reviews_percentile,
+    p.total_reviews_percentile,
+    p.playing_percentile,
     p.igdb_total_engagement,
-    p.engagement_velocity,
     p.playing,
     p.played,
     p.available_metrics_count,
@@ -41,37 +36,37 @@ SELECT
     g.cover,
     g.url
 FROM {{ ref('dim_games') }} g
-INNER JOIN review_percentiles p ON g.game_id = p.game_id
+INNER JOIN popularity_metrics p ON g.game_id = p.game_id
 WHERE 
-  -- 조건 1: 품질 기준 (대폭 완화)
-  p.steam_positive_ratio >= 0.65  -- 65% 이상 (적당한 품질)
+  -- 조건 1: 품질 기준 (positive reviews가 많아야 함)
+  p.positive_reviews_percentile >= 50  -- 상위 50% positive reviews
   
-  -- 조건 2: 최소 검증 (대폭 완화)
-  AND p.review_percentile >= 10  -- 상위 90% (거의 모든 게임)
+  -- 조건 2: 최소 검증
+  AND p.total_reviews_percentile >= 10  -- 상위 90% total reviews
   
-  -- 조건 3: 최근성 또는 성장성 또는 인지도 (대폭 완화)
+  -- 조건 3: 최근성 또는 성장성 또는 인지도 (4가지 옵션 중 하나 만족)
   AND (
       -- 옵션 A: 최근 5년 출시
       (g.first_release_date IS NOT NULL AND to_timestamp(g.first_release_date) >= CURRENT_TIMESTAMP - INTERVAL '5 years')
       OR
-      -- 옵션 B: engagement velocity 상위 60%
-      p.velocity_percentile >= 40
+      -- 옵션 B: 현재 활발히 플레이 중
+      p.playing_percentile >= 40  -- 상위 60% playing activity
       OR
       -- 옵션 C: 멀티플랫폼
       p.cross_platform_score >= 2
       OR
-      -- 옵션 D: 높은 평점
+      -- 옵션 D: 고평점
       g.aggregated_rating >= 75
   )
 ORDER BY 
     -- 정렬 우선순위
     CASE 
-        WHEN p.velocity_percentile >= 70 THEN 3  -- 매우 빠른 성장
+        WHEN p.playing_percentile >= 70 THEN 3  -- 매우 활발한 플레이
         WHEN g.first_release_date IS NOT NULL 
              AND to_timestamp(g.first_release_date) >= CURRENT_TIMESTAMP - INTERVAL '1 year' THEN 2  -- 신작
         ELSE 1
     END DESC,
-    p.velocity_percentile DESC,
-    p.steam_positive_ratio DESC,
+    p.playing_percentile DESC,
+    p.positive_reviews_percentile DESC,
     p.cross_platform_score DESC
 LIMIT 100
