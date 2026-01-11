@@ -40,13 +40,8 @@ SELECT
     g.url
 FROM {{ ref('dim_games') }} g
 INNER JOIN review_percentiles p ON g.game_id = p.game_id
-WHERE p.review_percentile >= 50  -- 상위 50% 리뷰 수 (충분한 데이터)
-  AND (
-      p.steam_controversy_ratio >= 0.40  -- 40%+ 부정률 (진짜 논란)
-      OR (
-          p.steam_controversy_ratio BETWEEN 0.45 AND 0.55  -- 찬반 비슷 (45-55% 혼합)
-      )
-  )
+WHERE p.review_percentile >= 30  -- 상위 70% 리뷰 수 (조건 완화)
+  AND p.steam_controversy_ratio >= 0.25  -- 25%+ 부정률 (논란의 여지)
 ORDER BY 
     -- 찬반이 정확히 50:50에 가까울수록 높은 점수
     ABS(p.steam_controversy_ratio - 0.50) ASC,

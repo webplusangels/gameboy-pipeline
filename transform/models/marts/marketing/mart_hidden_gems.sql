@@ -47,15 +47,10 @@ SELECT
     g.url
 FROM {{ ref('dim_games') }} g
 INNER JOIN percentiles p ON g.game_id = p.game_id
-WHERE p.steam_positive_ratio >= 0.80  -- 높은 긍정률 (80% 이상, 범위 확대)
-  AND p.steam_positive_ratio <= 0.95  -- 너무 완벽하지 않음 (다양성 확보)
-  AND p.review_percentile <= 40  -- 하위 40% 리뷰 수 (적은 리뷰 = 숨어있음)
-  AND p.engagement_percentile <= 30  -- 하위 30% IGDB 참여도 (낮은 인지도)
-  AND COALESCE(p.steam_controversy_ratio, 0) < 0.25  -- 낮은 논란도 (약간 완화)
-  AND (
-      g.aggregated_rating IS NULL  -- 평론가 평가 없음 (진짜 숨은 게임) OR
-      OR g.aggregated_rating >= 75  -- 평론가도 인정하는 품질
-  )
+WHERE p.steam_positive_ratio >= 0.75  -- 높은 긍정률 (75% 이상으로 완화)
+  AND p.review_percentile <= 50  -- 하위 50% 리뷰 수 (숨어있음, 완화)
+  AND p.engagement_percentile <= 40  -- 하위 40% IGDB 참여도 (낮은 인지도, 완화)
+  AND COALESCE(p.steam_controversy_ratio, 0) < 0.30  -- 낮은 논란도
 ORDER BY 
     quality_score DESC,  -- 복합 품질 점수 우선
     p.review_percentile ASC,  -- 더 숨어있을수록 우선

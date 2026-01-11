@@ -7,8 +7,8 @@
     )
 }}
 
--- ⭐ 떠오르는 스타 게임 (최근 출시 + 빠른 성장 + 높은 품질)
--- 진정한 "Rising": 최근 2년 내 출시 + engagement velocity 높음 + 멀티플랫폼
+-- ⭐ 떠오르는 스타 게임 (최근 출시 + 빠른 성장 또는 높은 품질)
+-- 조건 완화: 더 많은 게임을 포착하도록 개선
 
 WITH popularity_metrics AS (
     SELECT * FROM {{ ref('fct_game_popularity') }}
@@ -42,19 +42,36 @@ SELECT
     g.url
 FROM {{ ref('dim_games') }} g
 INNER JOIN review_percentiles p ON g.game_id = p.game_id
-WHERE p.cross_platform_score >= 2  -- 최소 2개 플랫폼 이상
-  AND p.steam_positive_ratio >= 0.75  -- Steam 긍정률 75% 이상
-  AND p.review_percentile >= 30  -- 상위 70% 리뷰 수 (충분한 검증)
-  AND p.igdb_total_engagement > 0  -- IGDB 참여도 있음
+WHERE 
+  -- 조건 1: 품질 기준 (대폭 완화)
+  p.steam_positive_ratio >= 0.65  -- 65% 이상 (적당한 품질)
+  
+  -- 조건 2: 최소 검증 (대폭 완화)
+  AND p.review_percentile >= 10  -- 상위 90% (거의 모든 게임)
+  
+  -- 조건 3: 최근성 또는 성장성 또는 인지도 (대폭 완화)
   AND (
-      -- 조건 1: 최근 2년 내 출시 (진짜 신작)
-      (g.first_release_date IS NOT NULL AND to_timestamp(g.first_release_date) >= CURRENT_TIMESTAMP - INTERVAL '2 years')
+      -- 옵션 A: 최근 5년 출시
+      (g.first_release_date IS NOT NULL AND to_timestamp(g.first_release_date) >= CURRENT_TIMESTAMP - INTERVAL '5 years')
       OR
-      -- 조건 2: engagement_velocity 상위 40% (빠르게 성장 중)
-      p.velocity_percentile >= 60
+      -- 옵션 B: engagement velocity 상위 60%
+      p.velocity_percentile >= 40
+      OR
+      -- 옵션 C: 멀티플랫폼
+      p.cross_platform_score >= 2
+      OR
+      -- 옵션 D: 높은 평점
+      g.aggregated_rating >= 75
   )
 ORDER BY 
+    -- 정렬 우선순위
+    CASE 
+        WHEN p.velocity_percentile >= 70 THEN 3  -- 매우 빠른 성장
+        WHEN g.first_release_date IS NOT NULL 
+             AND to_timestamp(g.first_release_date) >= CURRENT_TIMESTAMP - INTERVAL '1 year' THEN 2  -- 신작
+        ELSE 1
+    END DESC,
     p.velocity_percentile DESC,
-    p.cross_platform_score DESC,
-    p.steam_positive_ratio DESC
+    p.steam_positive_ratio DESC,
+    p.cross_platform_score DESC
 LIMIT 100
