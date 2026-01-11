@@ -7,20 +7,23 @@
     )
 }}
 
--- 🔥 지금 가장 핫한 게임 (Engagement Velocity 기반)
--- Playing / Played 비율이 높아 현재 활발하게 플레이되는 게임
+-- 🔥 지금 가장 핫한 게임 (Playing Activity 기반)
+-- 현재 활발하게 플레이되는 게임 (이미 정규화된 playing 값 활용)
 
 WITH popularity_metrics AS (
     SELECT * FROM {{ ref('fct_game_popularity') }}
+    WHERE playing IS NOT NULL
+      AND played IS NOT NULL
 )
 
 SELECT
     g.game_name,
-    p.engagement_velocity,
     p.playing,
     p.played,
+    p.playing_percentile,
+    p.played_percentile,
     p.igdb_total_engagement,
-    p.steam_positive_ratio,
+    p.steam_positive_reviews,
     p.cross_platform_score,
     g.aggregated_rating,
     g.platform_names,
@@ -31,8 +34,7 @@ SELECT
     g.url
 FROM {{ ref('dim_games') }} g
 INNER JOIN popularity_metrics p ON g.game_id = p.game_id
-WHERE p.engagement_velocity IS NOT NULL
-  AND p.played >= 0.0001  -- 최소 임계값 이상 플레이한 게임 (정규화된 점수)
-  AND p.engagement_velocity > 0.01  -- 최소 1% 이상의 velocity
-ORDER BY p.engagement_velocity DESC, p.playing DESC
+WHERE p.playing_percentile >= 50  -- 상위 50% 현재 플레이 중인 게임
+  AND p.played_percentile >= 20  -- 최소한의 played 이력
+ORDER BY p.playing_percentile DESC, p.playing DESC
 LIMIT 100
