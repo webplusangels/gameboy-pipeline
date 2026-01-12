@@ -7,21 +7,37 @@
     )
 }}
 
--- ⚠️ 논란의 게임 (부정 리뷰가 많은 게임)
--- 이미 정규화된 negative_reviews 값을 기준으로 순위 선정
+-- ⚠️ 논란의 게임 (찬반 양극화 게임)
+-- 부정도 많고 긍정도 많은 진짜 "논란작" 선별
+-- 단순 망작이 아닌 의견이 갈리는 게임
 
 WITH popularity_metrics AS (
     SELECT * FROM {{ ref('fct_game_popularity') }}
     WHERE steam_negative_reviews IS NOT NULL
       AND steam_total_reviews IS NOT NULL
+      AND steam_positive_reviews IS NOT NULL
+),
+
+scored_controversial AS (
+    SELECT
+        *,
+        -- Controversy Score: 부정도 많고 긍정도 많을수록 높은 점수 (양극화)
+        (
+            negative_reviews_percentile * 0.50 +   -- 부정 리뷰 많음 (50%)
+            positive_reviews_percentile * 0.30 +   -- 긍정 리뷰도 많음 (30%, 양극화 핵심)
+            total_reviews_percentile * 0.20        -- 충분한 샘플 (20%)
+        ) AS controversy_score
+    FROM popularity_metrics
 )
 
 SELECT
     g.game_name,
+    p.controversy_score,
     p.steam_negative_reviews,
     p.steam_positive_reviews,
     p.steam_total_reviews,
     p.negative_reviews_percentile,
+    p.positive_reviews_percentile,
     p.total_reviews_percentile,
     p.igdb_total_engagement,
     g.aggregated_rating,
@@ -32,10 +48,11 @@ SELECT
     g.cover,
     g.url
 FROM {{ ref('dim_games') }} g
-INNER JOIN popularity_metrics p ON g.game_id = p.game_id
-WHERE p.negative_reviews_percentile >= 30  -- 상위 70% negative reviews (논란 많음)
-  AND p.total_reviews_percentile >= 20  -- 최소한의 리뷰 수 필요
+INNER JOIN scored_controversial p ON g.game_id = p.game_id
+WHERE p.negative_reviews_percentile >= 40        -- 상위 60% 부정 리뷰
+  AND p.positive_reviews_percentile >= 30        -- 상위 70% 긍정 리뷰 (양극화 필수)
+  AND p.total_reviews_percentile >= 30           -- 충분한 리뷰 수
 ORDER BY 
-    p.negative_reviews_percentile DESC,  -- 부정 리뷰가 가장 많은 순
-    p.steam_total_reviews DESC
+    p.controversy_score DESC,          -- Controversy score 우선
+    p.steam_total_reviews DESC         -- 리뷰 수 많을수록
 LIMIT 100

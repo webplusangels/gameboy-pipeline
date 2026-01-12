@@ -7,27 +7,63 @@
     )
 }}
 
--- ⭐ 떠오르는 스타 게임 (최근 출시 + 빠른 성장 또는 높은 품질)
--- 조건 완화: 더 많은 게임을 포착하도록 개선
+-- ⭐ 떠오르는 스타 게임 (종합 점수 기반)
+-- 현재 인기도 + 성장 속도 + 품질을 종합적으로 평가
 
 WITH popularity_metrics AS (
-    SELECT * FROM {{ ref('fct_game_popularity') }}
-    WHERE steam_positive_reviews IS NOT NULL
-      AND steam_total_reviews IS NOT NULL
+    SELECT 
+        *,
+        -- Twitch percentile 계산 (선택적)
+        NTILE(100) OVER (ORDER BY COALESCE(twitch_24hr_hours_watched, 0)) AS twitch_percentile,
+        
+        -- 성장 속도 (Playing / Played 비율)
+        CASE 
+            WHEN COALESCE(played, 0) > 0 
+            THEN COALESCE(playing, 0) / played
+            ELSE 0
+        END AS velocity_ratio
+    FROM {{ ref('fct_game_popularity') }}
+    WHERE playing IS NOT NULL  -- playing이 있어야 함 (핵심 지표)
+),
+
+velocity_percentiles AS (
+    SELECT 
+        *,
+        NTILE(100) OVER (ORDER BY velocity_ratio) AS velocity_percentile
+    FROM popularity_metrics
+),
+
+scored_games AS (
+    SELECT
+        *,
+        -- 종합 점수 계산 (가중 평균)
+        (
+            (playing_percentile * 0.30) +                                      -- 현재 인기 (30%, 35%→30%)
+            (velocity_percentile * 0.25) +                                     -- 성장 속도 (25%)
+            (COALESCE(engagement_percentile, 0) * 0.05) +                     -- IGDB 참여도 (5%, NEW)
+            (COALESCE(positive_reviews_percentile, 0) * 0.15) +               -- Steam 유저 평가 (15%, 20%→15%)
+            (COALESCE(twitch_percentile, 0) * 0.10) +                         -- Twitch 인기 (10%, 선택적)
+            (COALESCE(g.aggregated_rating, 75) * 0.15)                        -- 전문가 평가 (15%, 10%→15%)
+        ) AS rising_score
+    FROM velocity_percentiles p
+    LEFT JOIN {{ ref('dim_games') }} g ON p.game_id = g.game_id
 )
 
 SELECT
     g.game_name,
+    p.rising_score,
+    p.playing_percentile,
+    p.velocity_percentile,
+    p.engagement_percentile,
+    p.velocity_ratio,
+    p.positive_reviews_percentile,
+    p.twitch_percentile,
     p.cross_platform_score,
     p.steam_positive_reviews,
     p.steam_total_reviews,
-    p.positive_reviews_percentile,
-    p.total_reviews_percentile,
-    p.playing_percentile,
-    p.igdb_total_engagement,
     p.playing,
     p.played,
-    p.available_metrics_count,
+    p.igdb_total_engagement,
     g.aggregated_rating,
     g.platform_names,
     g.genre_names,
@@ -36,37 +72,11 @@ SELECT
     g.cover,
     g.url
 FROM {{ ref('dim_games') }} g
-INNER JOIN popularity_metrics p ON g.game_id = p.game_id
+INNER JOIN scored_games p ON g.game_id = p.game_id
 WHERE 
-  -- 조건 1: 품질 기준 (positive reviews가 많아야 함)
-  p.positive_reviews_percentile >= 50  -- 상위 50% positive reviews
-  
-  -- 조건 2: 최소 검증
-  AND p.total_reviews_percentile >= 10  -- 상위 90% total reviews
-  
-  -- 조건 3: 최근성 또는 성장성 또는 인지도 (4가지 옵션 중 하나 만족)
-  AND (
-      -- 옵션 A: 최근 5년 출시
-      (g.first_release_date IS NOT NULL AND to_timestamp(g.first_release_date) >= CURRENT_TIMESTAMP - INTERVAL '5 years')
-      OR
-      -- 옵션 B: 현재 활발히 플레이 중
-      p.playing_percentile >= 40  -- 상위 60% playing activity
-      OR
-      -- 옵션 C: 멀티플랫폼
-      p.cross_platform_score >= 2
-      OR
-      -- 옵션 D: 고평점
-      g.aggregated_rating >= 75
-  )
+  p.playing_percentile >= 30  -- 최소 활발도 (상위 70%)
 ORDER BY 
-    -- 정렬 우선순위
-    CASE 
-        WHEN p.playing_percentile >= 70 THEN 3  -- 매우 활발한 플레이
-        WHEN g.first_release_date IS NOT NULL 
-             AND to_timestamp(g.first_release_date) >= CURRENT_TIMESTAMP - INTERVAL '1 year' THEN 2  -- 신작
-        ELSE 1
-    END DESC,
-    p.playing_percentile DESC,
-    p.positive_reviews_percentile DESC,
-    p.cross_platform_score DESC
+    p.rising_score DESC,               -- 1차: 종합 점수
+    g.first_release_date DESC,         -- 2차: 최신 발매작
+    p.playing_percentile DESC          -- 3차: 현재 활발도
 LIMIT 100
