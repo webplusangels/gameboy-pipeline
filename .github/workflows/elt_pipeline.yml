@@ -16,6 +16,11 @@ on:
         type: boolean
         default: false
 
+# 동시 실행 방지 (한 번에 하나의 파이프라인만 실행)
+concurrency:
+  group: elt-pipeline
+  cancel-in-progress: false
+
 jobs:
   run-elt-pipeline:
     runs-on: ubuntu-latest
