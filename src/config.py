@@ -66,7 +66,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
     )
 
     batch_size: PositiveInt = Field(
-        default=50000, description="Batch size for data processing"
+        default=100000, description="Batch size for data processing"
     )
 
     model_config = SettingsConfigDict(

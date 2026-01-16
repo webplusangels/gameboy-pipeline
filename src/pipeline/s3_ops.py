@@ -24,7 +24,7 @@ async def create_clients() -> AsyncGenerator[tuple[httpx.AsyncClient, Any, Any],
     timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
 
     async with (
-        httpx.AsyncClient(timeout=timeout) as http_client,
+        httpx.AsyncClient(timeout=timeout, http2=True) as http_client,
         session.client("s3", region_name=region) as s3_client,
         session.client("cloudfront", region_name=region) as cloudfront_client,
     ):
