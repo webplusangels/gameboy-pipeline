@@ -17,7 +17,7 @@ clean-targets:
 models:
   transform:
     staging:
-      +materialized: "{{ 'ephemeral' if target.name == 'prod_s3' else 'view' }}"
+      +materialized: "{{ 'table' if target.name == 'prod_s3' else 'view' }}"
       +schema: staging
 
       bridge:
