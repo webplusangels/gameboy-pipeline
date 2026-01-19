@@ -11,6 +11,8 @@ models:
           - unique
       - name: game_name
         description: "게임 이름"
+        tests:
+          - not_null
       - name: game_summary
         description: "게임 요약 정보"
       - name: platform_names
