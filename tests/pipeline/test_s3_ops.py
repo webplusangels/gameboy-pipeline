@@ -585,6 +585,7 @@ async def test_move_files_atomically(
                 "Key": f"{source_prefix}batch-0.jsonl",
             },
             Key=f"{dest_prefix}batch-0.jsonl",
+            TaggingDirective="COPY",
         ),
         call(
             Bucket="test-bucket",
@@ -593,6 +594,7 @@ async def test_move_files_atomically(
                 "Key": f"{source_prefix}batch-1.jsonl",
             },
             Key=f"{dest_prefix}batch-1.jsonl",
+            TaggingDirective="COPY",
         ),
     ]
     mock_s3_client.copy_object.assert_has_calls(expected_copy_calls, any_order=True)
