@@ -310,11 +310,14 @@ async def move_files_atomically(
             max_retries = 5
             for retry in range(max_retries):
                 try:
-                    # Copy
+                    # Copy with tagging
+                    # TaggingDirective="COPY"를 명시하여 원본 태그(status=temp) 복사
+                    # 이후 tag_files_as_final에서 status=final로 변경됨
                     await s3_client.copy_object(
                         Bucket=bucket_name,
                         CopySource={"Bucket": bucket_name, "Key": source_key},
                         Key=dest_key,
+                        TaggingDirective="COPY",
                     )
 
                     # Delete source
